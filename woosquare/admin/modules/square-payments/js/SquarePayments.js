@@ -19,6 +19,7 @@
 			
 			jQuery('#card-initialization').hide();
 			function handlePaymentMethodSubmission(event, paymentMethod, shouldVerify = false,payments) {
+				event.preventDefault();
 				event.stopPropagation();
 				try {
 					// disable the submit button as we await tokenization and make a
@@ -40,8 +41,6 @@
 				}
 			})
 			cardButton.addEventListener('click', async function (event) {
-	        	event.preventDefault();
-				event.stopPropagation()
 				if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() =='square_plus'+square_params.sandbox){
 					handlePaymentMethodSubmission(event, card, true,payments);
 				}

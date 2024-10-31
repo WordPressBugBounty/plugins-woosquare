@@ -3,10 +3,10 @@ Plugin URI: https://wpexperts.io/
 Contributors: wpexpertsio
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=pay@objects.ws&item_name=DonationForPlugin
 Tags: square, inventory sync, woocommerce Square, credit card, square payment gateway 
-Requires at least: 6.4 
-Requires PHP: 7.4 
+Requires at least: 6.0
+Requires PHP: 7.0 
 Tested up to: 6.6
-Stable tag: 4.4.9
+Stable tag: 4.5
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,6 +199,13 @@ For more in-depth information, visit our comprehensive [documentation page](http
 8. Accept Cash App payments on WooCommerce
 
 == Changelog ==
+
+= 4.5 =
+* Fixed - Issue where "Live" Square account was incorrectly shown as connected on the Square Connect page.
+* Fixed - "Disconnect Square" button not functioning on the Square Connect page.
+* Note - Ensure to launch the seller test account from the Square developer dashboard before connecting your Square Sandbox account.
+* Fixed - 'Place Order' button failing after switching payment methods from Square on the checkout page.
+* Added - Compatibility with the latest version of WordPress and WooCommerce.
 
 = 4.4.9 =
 * Added compatibility with the latest WordPress and WooCommerce.

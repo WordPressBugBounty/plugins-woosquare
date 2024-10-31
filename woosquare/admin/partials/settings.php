@@ -216,7 +216,23 @@
 
 
 
-				<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { ?>
+				<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { 
+						if ( ! empty( get_transient( 'is_sandbox' ) ) ) {
+					?>
+
+					<div class="center-container">
+						<div class="custom-notification">
+							<div class="notification-icon">
+								<span class="noti-icon">&#9432;</span>
+							</div>
+							<div class="notification-content">
+								<p class="notification-text">
+									Make sure to launch <a target="_blank" class="wpep-highlight" href="https://developer.squareup.com/console/en/sandbox-test-accounts">seller test account</a> from the developer dashboard before connecting your Square Sandbox account.
+								</p>
+							</div>
+						</div>
+					</div>
+					<?php } ?>
 				<span class="statusTitle">
 					<small class="iconstatus icondis"></small>
 					<?php esc_html_e( 'Connect Now!', 'woosquare' ); ?>
