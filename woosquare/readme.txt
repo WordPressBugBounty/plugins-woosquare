@@ -5,8 +5,8 @@ Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=pay@obje
 Tags: square, inventory sync, woocommerce Square, credit card, square payment gateway 
 Requires at least: 6.0
 Requires PHP: 7.0 
-Tested up to: 6.6
-Stable tag: 4.5
+Tested up to: 6.7
+Stable tag: 4.5.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,6 +199,11 @@ For more in-depth information, visit our comprehensive [documentation page](http
 8. Accept Cash App payments on WooCommerce
 
 == Changelog ==
+
+= 4.5.2 =
+* Added - compatibility with the latest WordPress and WooCommerce.
+* Fixed - All minor/major bugs are resolved
+* Fixed - Support on google pay lagacy checkout.
 
 = 4.5 =
 * Fixed - Issue where "Live" Square account was incorrectly shown as connected on the Square Connect page.

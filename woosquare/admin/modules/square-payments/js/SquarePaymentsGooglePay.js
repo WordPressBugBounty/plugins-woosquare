@@ -47,8 +47,7 @@
 			
 			googlePayButton.addEventListener('click', async function (event) {
 				if(!jQuery('.square-nonce').val()){
-					console.log('emptyemptyempty');
-					event.stopPropagation();
+				    event.stopPropagation();
 					handlePaymentMethodSubmission(event, googlePay);
 				}
 			})
@@ -75,21 +74,21 @@
 
 		const tokenResult = await
 		paymentMethod.tokenize();
+		
 		if (tokenResult.status === 'OK') {
 			
-			var $form = jQuery('form.wc-block-checkout__form, form#order_review');
+			var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
 			// inject nonce to a hidden field to be submitted
 			/*$form.append( '<input type="hidden" class="errors" name="errors" value="' + errors + '" />' );
 			 $form.append( '<input type="hidden" class="noncedatatype" name="noncedatatype" value="' + noncedatatype + '" />' );
 			 $form.append( '<input type="hidden" class="cardData" name="cardData" value="' + cardData + '" />' );
 			 */
 			$form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
-
-			// if(jQuery('#card-container').html().length > 1){
-				// pay_form.submit();
-				jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
-			// }
-			// $form.submit();
+            if($form.attr("class").split(" ")[1] == "woocommerce-checkout"){
+                 $form.submit();
+            } else {
+                jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
+            }
 
 		/*cardButton.disabled = true;
 

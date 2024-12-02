@@ -140,7 +140,7 @@ jQuery( window  ).on("load", function() {
 			}
 		})
 	}
-	if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox ){
+	if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_apple_pay'+squareapplepay_params.sandbox ){
 		try {
 			if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_apple_pay'+squareapplepay_params.sandbox ){
 				applePay =  initializeApplePay(payments);

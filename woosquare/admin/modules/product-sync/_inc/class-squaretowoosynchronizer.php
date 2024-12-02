@@ -1824,7 +1824,7 @@ class SquareToWooSynchronizer {
 								'id' => $cat->category_id,
 							);
 						} else {
-							$object_new[ $kym ]->category->id = $category['catalog_v1_ids'][ $keyyy ]['catalog_v1_id'];
+							$object_new[ $kym ]->category = (object) $category['catalog_v1_ids'][ $keyyy ]['catalog_v1_id'];
 						}
 						$object_new[ $kym ]->category->name  = $category['category_data']['name'];
 						$object_new[ $kym ]->category->v2_id = $cat->category_id;

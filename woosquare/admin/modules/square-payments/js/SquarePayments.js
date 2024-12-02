@@ -45,7 +45,7 @@
 					handlePaymentMethodSubmission(event, card, true,payments);
 				}
 			});
-		}, 2000);
+		}, 500);
 		return card;
     }
 
@@ -188,7 +188,7 @@
 							console.error('Initializing Card failed', e);
 							return;
 						}
-					}, 500);
+					}, 150);
 					
 				// }
 			// })

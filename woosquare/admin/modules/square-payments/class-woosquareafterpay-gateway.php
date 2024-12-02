@@ -72,23 +72,7 @@ class WooSquareAfterPay_Gateway extends WC_Payment_Gateway {
 
 		// Hooks.
 		add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts_afterpay' ) );
-		add_action( 'admin_notices', array( $this, 'admin_notices_afterpay' ) );
 		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
-	}
-
-	/**
-	 * Check if required fields are set
-	 */
-	public function admin_notices_afterpay() {
-		if ( ! $this->enabled ) {
-			return;
-		}
-
-		// Show message if enabled and FORCE SSL is disabled and WordpressHTTPS plugin is not detected.
-		if ( ! WC_SQUARE_ENABLE_STAGING && ! class_exists( 'WordPressHTTPS' ) && ! is_ssl() ) {
-			// translators: Error message placeholder in a log entry. Placeholder: Error details.
-			echo '<div class="error"><p>' . sprintf( esc_html__( 'Square is enabled, but the <a href="%s">force SSL option</a> is disabled; your checkout is not secured! Please enable SSL and ensure your server has a valid SSL certificate.', 'woosquare' ), esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout' ) ) ) . '</p></div>';
-		}
 	}
 
 	/**

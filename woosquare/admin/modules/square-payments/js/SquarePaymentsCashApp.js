@@ -17,6 +17,7 @@
 			var total = total.substring(1, total.length);
 			var total_price = total.toString();
 		}
+		var total_price = total_price.replace(",", ""); 
 		const req = payments.paymentRequest({
 			countryCode: square_cashapp_params.country_code,
 			currencyCode: square_cashapp_params.currency_code,

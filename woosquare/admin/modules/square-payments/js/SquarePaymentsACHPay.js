@@ -153,6 +153,7 @@
 			var total_price = total.toString();
 			var total_price = parseFloat(total_price) * 100;
 		}
+		var total_price = total_price.replace(",", ""); 
 		return { 
 			accountHolderName,
 			intent: 'CHARGE',

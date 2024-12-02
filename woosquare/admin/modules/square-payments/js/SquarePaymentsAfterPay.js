@@ -16,6 +16,7 @@
 			var total = total.substring(1, total.length);
 			var total_price = total.toString();
 		}
+		var total_price = total_price.replace(",", ""); 
 		//console.log(total_price);
 		const req = payments.paymentRequest({
 			countryCode: square_afterpay_params.country_code,

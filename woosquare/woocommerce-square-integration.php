@@ -4,11 +4,11 @@
  * Requires Plugins: woocommerce
  * Plugin URI: https://wpexperts.io/products/woosquare/
  * Requires at least: 6.0
- * Tested up to: 6.6
+ * Tested up to: 6.7
  * Requires PHP: 7.0
  * PHP tested up to: 8.3
  * Description: WC Shop Sync purpose is to migrate & synchronize data (sales customers-invoices-products inventory) between Square system point of sale & WooCommerce plug-in.
- * Version: 4.5
+ * Version: 4.5.2
  * Author: Wpexpertsio
  * Author URI: https://wpexperts.io/
  * License: GPLv2 or later
@@ -29,11 +29,16 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
 	require_once plugin_dir_path( __FILE__ ) . 'includes/square-freemius.php';
 	add_action( 'plugins_loaded', 'run_woosquare_plus', 0 );
 }
-if ( ! function_exists( 'get_plugin_data' ) ) {
-	require_once ABSPATH . 'wp-admin/includes/plugin.php';
-}
+
 wp_using_ext_object_cache( false );
-$plugin_data = get_plugin_data( __FILE__ );
+$plugin_file = __FILE__;
+$plugin_data = get_file_data($plugin_file, array(
+    'Name'    => 'Plugin Name',
+    'Version'        => 'Version',
+    'Description'    => 'Description',
+    'Author'         => 'Author',
+    'Plugin URI'     => 'Plugin URI',
+));
 
 	$woosqu_plus_plugin_name = $plugin_data['Name'];
 if ( ! defined( 'WOOSQU_PLUS_PLUGIN_NAME' ) ) {
@@ -46,7 +51,7 @@ if ( ! defined( 'WOOSQU_PLUS_PLUGIN_NAME' ) ) {
  * Start at version 1.0.0 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define( 'PLUGIN_NAME_VERSION_WOOSQUARE_PLUS', '4.4.8' );
+define( 'PLUGIN_NAME_VERSION_WOOSQUARE_PLUS', $plugin_data['Version'] );
 define( 'WOO_SQUARE_TABLE_DELETED_DATA', 'woo_square_integration_deleted_data' );
 define( 'WOO_SQUARE_TABLE_SYNC_LOGS', 'woo_square_integration_logs' );
 define( 'WOO_SQUARE_PLUGIN_URL_PLUS', plugin_dir_url( __FILE__ ) );

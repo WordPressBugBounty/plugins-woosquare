@@ -235,7 +235,7 @@ class Square {
 					}
 					$location_id = ( $locations['id'] );
 					$str[]       = array(
-						$location_id => $locations['name'] . ' ' . str_replace( '_', ' ', $caps ),
+						$location_id => $locations['name'] . ' ' . str_replace('_', ' ', $caps ?? ''),
 					);
 				}
 				update_option( 'woo_square_locations' . get_transient( 'is_sandbox' ), $str );

@@ -137,50 +137,52 @@ class WooSquare_Payments {
 	public function wooplus_apple_pay_domain_verification() {
 
 		$token = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
-
-		$domain_name = ! empty( $_SERVER['HTTP_HOST'] ) ? wc_clean( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
-		if ( empty( $domain_name ) ) {
-			throw new \Exception( 'Unable to verify domain with Apple Pay - no domain found in $_SERVER[\'HTTP_HOST\'].' );
-		}
-
-		if ( ! $this->woo_square_check_apple_pay_verification_file() ) {
-			update_option( 'woo_square_plus_apple_pay_domain_registered' . get_transient( 'is_sandbox' ) . '-' . $domain_name, 'no' );
-			delete_option( 'woo_square_plus_apple_pay_domain_registered_url' . get_transient( 'is_sandbox' ) . '-' . $domain_name );
-			return false;
-		}
-
-		$recently_registered = get_transient( 'woo_square_check_apple_pay_domain_registration' . get_transient( 'is_sandbox' ) . '-' . $domain_name );
-		if ( ! $recently_registered ) {
-			$url = 'https://connect.' . WC_SQUARE_STAGING_URL . '.com/v2/apple-pay/domains';
-
-			$response = wp_remote_post(
-				$url,
-				array(
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $token,
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode(
-						array(
-							'domain_name' => $domain_name,
-						)
-					),
-				)
-			);
-
-			if ( is_wp_error( $response ) ) {
-				throw new \Exception( sprintf( 'Unable to verify domain %s - %s', esc_html( $domain_name ), esc_html( $response ) ) );
+		if(!empty($token)){
+				$domain_name = ! empty( $_SERVER['HTTP_HOST'] ) ? wc_clean( sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
+			if ( empty( $domain_name ) ) {
+				throw new \Exception( 'Unable to verify domain with Apple Pay - no domain found in $_SERVER[\'HTTP_HOST\'].' );
 			}
 
-			$parsed_response = json_decode( $response['body'], true );
-			if ( 200 === $response['response']['code'] || ! empty( $parsed_response['status'] ) || 'VERIFIED' === $parsed_response['status'] ?? null ) {
+			if ( ! $this->woo_square_check_apple_pay_verification_file() ) {
+				update_option( 'woo_square_plus_apple_pay_domain_registered' . get_transient( 'is_sandbox' ) . '-' . $domain_name, 'no' );
+				delete_option( 'woo_square_plus_apple_pay_domain_registered_url' . get_transient( 'is_sandbox' ) . '-' . $domain_name );
+				return false;
+			}
 
-				update_option( 'woo_square_plus_apple_pay_domain_registered' . get_transient( 'is_sandbox' ) . '-' . $domain_name, 'yes' );
-				update_option( 'woo_square_plus_apple_pay_domain_registered_url' . get_transient( 'is_sandbox' ) . '-' . $domain_name, $domain_name );
-				$this->log( 'Your domain has been verified with Apple Pay!' );
-				set_transient( 'woo_square_check_apple_pay_domain_registration' . get_transient( 'is_sandbox' ) . '-' . $domain_name, true, HOUR_IN_SECONDS );
+			$recently_registered = get_transient( 'woo_square_check_apple_pay_domain_registration' . get_transient( 'is_sandbox' ) . '-' . $domain_name );
+			if ( ! $recently_registered ) {
+				$url = 'https://connect.' . WC_SQUARE_STAGING_URL . '.com/v2/apple-pay/domains';
+
+				$response = wp_remote_post(
+					$url,
+					array(
+						'headers' => array(
+							'Authorization' => 'Bearer ' . $token,
+							'Content-Type'  => 'application/json',
+						),
+						'body'    => wp_json_encode(
+							array(
+								'domain_name' => $domain_name,
+							)
+						),
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					throw new \Exception( sprintf( 'Unable to verify domain %s - %s', esc_html( $domain_name ), esc_html( $response ) ) );
+				}
+
+				$parsed_response = json_decode( $response['body'], true );
+				if ( 200 === $response['response']['code'] || ! empty( $parsed_response['status'] ) || 'VERIFIED' === $parsed_response['status'] ?? null ) {
+
+					update_option( 'woo_square_plus_apple_pay_domain_registered' . get_transient( 'is_sandbox' ) . '-' . $domain_name, 'yes' );
+					update_option( 'woo_square_plus_apple_pay_domain_registered_url' . get_transient( 'is_sandbox' ) . '-' . $domain_name, $domain_name );
+					$this->log( 'Your domain has been verified with Apple Pay!' );
+					set_transient( 'woo_square_check_apple_pay_domain_registration' . get_transient( 'is_sandbox' ) . '-' . $domain_name, true, HOUR_IN_SECONDS );
+				}
 			}
 		}
+		
 	}
 
 	/**

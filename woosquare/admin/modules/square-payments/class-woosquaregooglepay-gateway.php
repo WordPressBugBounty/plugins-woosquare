@@ -77,23 +77,7 @@ class WooSquareGooglePay_Gateway extends WC_Payment_Gateway {
 			add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts_googlepay' ) );
 		}
 
-		add_action( 'admin_notices', array( $this, 'admin_notices_googlepay' ) );
 		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
-	}
-
-	/**
-	 * Check if required fields are set.
-	 */
-	public function admin_notices_googlepay() {
-		if ( ! $this->enabled ) {
-			return;
-		}
-
-		// Show message if enabled and FORCE SSL is disabled and WordpressHTTPS plugin is not detected.
-		if ( ! WC_SQUARE_ENABLE_STAGING && ! class_exists( 'WordPressHTTPS' ) && ! is_ssl() ) {
-			// translators: %s is the wooCommerce setting page url.
-			echo '<div class="error"><p>' . sprintf( esc_html__( 'Square is enabled, but the <a href="%s">force SSL option</a> is disabled; your checkout is not secured! Please enable SSL and ensure your server has a valid SSL certificate.', 'wpexpert-square' ), esc_url( admin_url( 'admin.php?page=wc-settings&tab=checkout' ) ) ) . '</p></div>';
-		}
 	}
 
 	/**
