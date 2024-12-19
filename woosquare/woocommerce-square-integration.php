@@ -8,7 +8,7 @@
  * Requires PHP: 7.0
  * PHP tested up to: 8.3
  * Description: WC Shop Sync purpose is to migrate & synchronize data (sales customers-invoices-products inventory) between Square system point of sale & WooCommerce plug-in.
- * Version: 4.5.2
+ * Version: 4.5.3
  * Author: Wpexpertsio
  * Author URI: https://wpexperts.io/
  * License: GPLv2 or later

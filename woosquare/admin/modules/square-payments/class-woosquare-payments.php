@@ -173,7 +173,7 @@ class WooSquare_Payments {
 				}
 
 				$parsed_response = json_decode( $response['body'], true );
-				if ( 200 === $response['response']['code'] || ! empty( $parsed_response['status'] ) || 'VERIFIED' === $parsed_response['status'] ?? null ) {
+				if ( 200 === $response['response']['code'] || ! empty( $parsed_response['status'] ?? null ) || 'VERIFIED' === ($parsed_response['status'] ?? null) ) {
 
 					update_option( 'woo_square_plus_apple_pay_domain_registered' . get_transient( 'is_sandbox' ) . '-' . $domain_name, 'yes' );
 					update_option( 'woo_square_plus_apple_pay_domain_registered_url' . get_transient( 'is_sandbox' ) . '-' . $domain_name, $domain_name );

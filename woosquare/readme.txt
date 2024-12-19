@@ -6,7 +6,7 @@ Tags: square, inventory sync, woocommerce Square, credit card, square payment ga
 Requires at least: 6.0
 Requires PHP: 7.0 
 Tested up to: 6.7
-Stable tag: 4.5.2
+Stable tag: 4.5.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -199,6 +199,9 @@ For more in-depth information, visit our comprehensive [documentation page](http
 8. Accept Cash App payments on WooCommerce
 
 == Changelog ==
+
+= 4.5.3 =
+* Fixed - ACH payment issue fixed.
 
 = 4.5.2 =
 * Added - compatibility with the latest WordPress and WooCommerce.
