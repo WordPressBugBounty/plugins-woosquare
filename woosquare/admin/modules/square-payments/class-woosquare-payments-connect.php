@@ -1,8 +1,12 @@
 <?php
 /**
- * Woosquare_Plus v1.0 by wpexperts.io
+ * WooSquare Payments Connect
  *
- * @package Woosquare_Plus
+ * This file contains the WooSquare_Payments_Connect class, which handles various payment-related operations
+ * for WooSquare, including charging card nonces, retrieving transactions, voiding transactions, refunding transactions,
+ * and managing customers.
+ *
+ * @package WooSquarePlus
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,16 +14,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Represents a connection to the Square payment system for WooCommerce.
+ * WooSquare_Payments_Connect Class
  *
- * This class extends the WooSquare_Client class and provides additional functionality
- * for connecting to and interacting with Square payments.
+ * Handles various payment-related operations for WooSquare, including charging card nonces, retrieving transactions,
+ * voiding transactions, refunding transactions, and managing customers.
+ *
+ * @package WooSquarePlus
  */
 class WooSquare_Payments_Connect extends WooSquare_Client {
+
 	const LOCATIONS_CACHE_KEY = 'WooSquare_payments_locations';
 
 	/**
-	 * The API version.
+	 * The API version used for requests.
 	 *
 	 * @var string
 	 */
@@ -32,10 +39,9 @@ class WooSquare_Payments_Connect extends WooSquare_Client {
 	 * retrieve the merchant account details and if it comes back
 	 * with a code 200, we assume it is valid.
 	 *
-	 * @access public
-	 * @since 1.0.0
+	 * @since   1.0.0
 	 * @version 1.0.0
-	 * @return bool
+	 * @return  bool
 	 */
 	public function is_valid_token() {
 
@@ -51,7 +57,7 @@ class WooSquare_Payments_Connect extends WooSquare_Client {
 	/**
 	 * Charges the card nonce.
 	 *
-	 * @param array $data        An array of data containing payment details.
+	 * @param array $data An array of data containing payment details.
 	 *
 	 * @return object An object containing the result of the payment processing.
 	 */

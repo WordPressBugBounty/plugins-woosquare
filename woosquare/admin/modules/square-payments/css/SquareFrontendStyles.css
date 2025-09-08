@@ -72,13 +72,40 @@ table.cardWrapTable td img {
     vertical-align: top;
     margin: 0px;
 }
-.method-initialization {
-  animation: blinker 1s linear infinite;
-   width:100px;
+#spinner {
+   position: absolute;
+    left: 68%;
+    margin-left: -120px;
+    width: 40px;
+    margin-top: 5px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    border-top-color: #333;
+    animation: spin 1s linear infinite;
 }
-
-@keyframes blinker {
-  50% {
-    opacity: 0;
-  }
+input#wooc_square_tmethod {
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    border-radius: 4px;
+}
+input#wooc_square_tmethod:hover {
+  background-color: #3e8e41;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+button#terminal-pay-button {
+    width: 100%;
+    cursor: pointer;
+}
+img.terminal-pay-button-img {
+    padding: 5px;
+    left: 0;
+    width: 35px;
 }

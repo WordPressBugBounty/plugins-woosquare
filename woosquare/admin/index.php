@@ -1,8 +1,6 @@
 <?php
 /**
- * The product-sync functionality of the plugin.
+ * Silence is golden.
  *
  * @package Woosquare_Plus
  */
-
-// Silence is golden.

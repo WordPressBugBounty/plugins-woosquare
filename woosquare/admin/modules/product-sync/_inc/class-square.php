@@ -32,13 +32,6 @@ class Square {
 	protected $app_id;
 
 	/**
-	 * The base URL for Square API.
-	 *
-	 * @var string
-	 */
-	protected $square_url;
-
-	/**
 	 * The base URL for Square API version 2.
 	 *
 	 * @var string
@@ -53,30 +46,21 @@ class Square {
 	protected $location_id;
 
 	/**
-	 * The main Square URL (if needed).
-	 *
-	 * @var string
-	 */
-	protected $main_square_url;
-
-	/**
 	 * Constructor for initializing a Square API client.
 	 *
 	 * @param object $access_token The access token used for Square API authentication.
-	 * @param string $app_id The Square application ID.
 	 * @param string $location_id The location ID (default is 'me').
+	 * @param string $app_id The Square application ID.
 	 */
-	public function __construct( $access_token, $app_id, $location_id = 'me' ) {
+	public function __construct( $access_token, $location_id = 'me', $app_id = null ) {
 		$this->access_token = $access_token;
 		$this->app_id       = $app_id;
 		if ( empty( $location_id ) ) {
-			$location_id = 'me'; }
-		$this->location_id     = $location_id;
-		$this->square_url      = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v1/' . $this->location_id;
-		$this->square_v2_url   = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/';
-		$this->main_square_url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v1/me';
+			$location_id = 'me';
+		}
+		$this->location_id   = $location_id;
+		$this->square_v2_url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/';
 	}
-
 
 	/**
 	 * Get the access token used for Square API requests.
@@ -115,15 +99,6 @@ class Square {
 	}
 
 	/**
-	 * Get the Square URL used for API requests.
-	 *
-	 * @return string The current Square URL.
-	 */
-	public function get_square_url() {
-		return $this->square_url;
-	}
-
-	/**
 	 * Get the Square version 2 URL used for API requests.
 	 *
 	 * @return string The current Square version 2 URL.
@@ -143,15 +118,6 @@ class Square {
 	}
 
 	/**
-	 * Get the current location ID used for Square API requests.
-	 *
-	 * @return string The current location ID.
-	 */
-	public function get_location_id() {
-		return $this->location_id;
-	}
-
-	/**
 	 * Authorizes the Square app and sets up the WooCommerce Square settings.
 	 *
 	 * @return bool True if the authorization was successful, false otherwise.
@@ -159,26 +125,9 @@ class Square {
 	public function authorize() {
 		$access_token = explode( '-', $this->access_token );
 
-		delete_option( 'woo_square_account_type' );
-		delete_option( 'woo_square_account_currency_code' );
-		delete_option( 'wc_square_version', '1.0.11', 'yes' );
-		delete_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
-		delete_option( 'woo_square_app_id' );
-		delete_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) );
-		delete_option( 'woo_square_business_name' );
-
 		$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
-		if ( ! empty( $woocommerce_square_plus_settings['enable_sandbox'] ) && 'yes' !== $woocommerce_square_plus_settings['enable_sandbox'] ) {
-
-			// live/production app id from Square account.
-			if ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
-				define( 'SQUARE_APPLICATION_ID', $this->app_id );
-			}
-			if ( ! defined( 'WC_SQUARE_ENABLE_STAGING' ) ) {
-				define( 'WC_SQUARE_ENABLE_STAGING', false );
-			}
-		} else {
-			// live/production app id from Square account.
+		if ( get_transient( 'is_sandbox' ) ) {
+			// Sandbox/developement app id from Square account.
 			if ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
 				define( 'SQUARE_APPLICATION_ID', $this->app_id );
 			}
@@ -187,6 +136,15 @@ class Square {
 			}
 			update_option( 'woo_square_account_type', 'BUSINESS' );
 			update_option( 'woo_square_account_currency_code', get_option( 'woocommerce_currency' ) );
+
+		} else {
+			// live/production app id from Square account.
+			if ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
+				define( 'SQUARE_APPLICATION_ID', $this->app_id );
+			}
+			if ( ! defined( 'WC_SQUARE_ENABLE_STAGING' ) ) {
+				define( 'WC_SQUARE_ENABLE_STAGING', false );
+			}
 		}
 
 		$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/locations';
@@ -210,17 +168,15 @@ class Square {
 			update_option( 'woo_square_app_id', WOOSQU_PLUS_APPID );
 			update_option( 'woo_square_account_type', isset( $response['type'] ) ? $response['type'] : null );
 			update_option( 'woo_square_account_currency_code', isset( $response['currency'] ) ? $response['currency'] : null );
-
 			$result = $this->get_all_locations();
 			if ( ! empty( $result['locations'] ) && is_array( $result['locations'] ) ) {
 
 				foreach ( $result['locations'] as $key => $value ) {
 					if ( ! empty( $value['capabilities'] )
 						&& 'ACTIVE' === $value['status']
-						&& 'sandbox' === $access_token[0]
 					) {
 						$accurate_result['locations'][] = $result['locations'][ $key ];
-					} elseif ( 'sandbox' !== $access_token[0] ) {
+					} elseif ( 'sandbox' === $access_token[0] ) {
 						$accurate_result['locations'][] = $result['locations'][ $key ];
 					}
 				}
@@ -234,12 +190,14 @@ class Square {
 						$caps = ' | ' . implode( ',', $locations['capabilities'] ) . ' ENABLED';
 					}
 					$location_id = ( $locations['id'] );
-					$str[]       = array(
-						$location_id => $locations['name'] . ' ' . str_replace('_', ' ', $caps ?? ''),
-					);
+					if ( 'ACTIVE' === $locations['status'] ) {
+						$str[] = array(
+							$location_id => $locations['name'] . ' ' . str_replace( '_', ' ', $caps ),
+						);
+					}
 				}
 				update_option( 'woo_square_locations' . get_transient( 'is_sandbox' ), $str );
-				update_option( 'woo_square_business_name', $locations['name'] );
+				update_option( 'woo_square_business_name' . get_transient( 'is_sandbox' ), $locations['name'] );
 
 			}
 
@@ -275,23 +233,27 @@ class Square {
 		}
 		$response = wp_remote_request( $url, $request );
 
-		$decoded_response = json_decode( wp_remote_retrieve_body( $response ) );
-
 		if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->cursor ) ) {
 
-			$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->objects );
-
+			if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->objects ) ) {
+				$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->objects );
+			} elseif ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->counts ) ) {
+				$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->counts );
+			}
 		} elseif ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->objects ) ) {
 
 			$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->objects );
 
 		} elseif ( ! empty( wp_remote_retrieve_body( $response ) ) ) {
 
-			$respons_body[] = wp_remote_retrieve_body( $response );
-
+			if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->counts ) ) {
+				$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->counts );
+			} else {
+				$respons_body[] = wp_remote_retrieve_body( $response );
+			}
 		}
 
-		if ( 'GET' === $method ) {
+		if ( 'GET' === $method || 'POST' === $method ) {
 			$postheaders               = '';
 			$wp_remote_retrieve_header = wp_remote_retrieve_headers( $response );
 			foreach ( $wp_remote_retrieve_header as $w_header ) {
@@ -300,10 +262,21 @@ class Square {
 
 			if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->cursor ) ) {
 
-				$args = array(
+				$args       = array(
 					'cursor' => json_decode( wp_remote_retrieve_body( $response ) )->cursor,
 				);
-
+				$after_date = gmdate( 'Y-m-d', strtotime( '-12 month' ) ) . 'T00:00:00Z';
+				if ( isset( $headers['requesting'] ) ) {
+					if ( 'inventory' === $headers['requesting'] ) {
+						$args = array_merge(
+							$args,
+							array(
+								'states'        => array( 'IN_STOCK' ),
+								'updated_after' => $after_date,
+							)
+						);
+					}
+				}
 				if ( ! empty( $args ) ) {
 					$response = $this->wp_remote_woosquare( $url, $args, $method, $headers, $respons_body );
 
@@ -320,7 +293,118 @@ class Square {
 					$response = $this->wp_remote_woosquare( $url, $args, $method, $headers, $respons_body );
 				}
 			} else {
-					$merge = array();
+				$merge = array();
+
+				foreach ( $respons_body as $formerge ) {
+					if ( ! empty( $merge ) ) {
+						$merge = array_merge( json_decode( $formerge, true ), $merge );
+					} else {
+						$merge = json_decode( ( $formerge ) );
+					}
+				}
+
+				if ( ! is_wp_error( $response ) ) {
+					$response['body'] = wp_json_encode( $merge );
+
+					return $response;
+				} else {
+					update_option( 'wp_remote_woosquare_get_error_message_' . gmdate( 'Y-m-d H:i:s' ), $response->get_error_message() );
+					return false;
+				}
+			}
+		}
+		if ( ! is_wp_error( $response ) ) {
+			return $response;
+		} else {
+			update_option( 'wp_remote_woosquare_get_error_message_' . gmdate( 'Y-m-d H:i:s' ), $response->get_error_message() );
+			return false;
+		}
+	}
+
+	/**
+	 * Makes a remote request to the Square API and handles paginated responses.
+	 *
+	 * This function sends a GET or POST request to the Square API using the provided URL, arguments, method, and headers.
+	 * It handles paginated responses by recursively calling itself if a cursor or batch token is detected. The function
+	 * merges responses and returns the complete result.
+	 *
+	 * @param string $url           The URL to send the request to.
+	 * @param array  $args          The arguments to include in the request.
+	 * @param string $method        The HTTP method to use ('GET' or 'POST').
+	 * @param array  $headers       The headers to include in the request.
+	 * @param array  $respons_body  An array to accumulate response data across multiple requests.
+	 *
+	 * @return array|false The response array on success, or false on failure.
+	 */
+	public function wp_remote_woosquare_v2( $url, $args, $method, $headers, $respons_body ) {
+
+		$request = array(
+			'headers' => $headers,
+			'method'  => $method,
+		);
+		if ( 'GET' === $method && ! empty( $args ) && is_array( $args ) ) {
+			$url = add_query_arg( $args, $url );
+		} elseif ( ! empty( $args ) ) {
+				$request['body'] = wp_json_encode( $args );
+		}
+		$response = wp_remote_request( $url, $request );
+
+		$response_bodyss = json_decode( wp_remote_retrieve_body( $response ), true );
+		$keys            = array_key_first( $response_bodyss );
+
+		if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->cursor ) ) {
+
+			$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->$keys );
+			if ( isset( json_decode( wp_remote_retrieve_body( $response ) )->related_objects ) ) {
+				$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->related_objects );
+			}
+		} elseif ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->$keys ) ) {
+			$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->$keys );
+			if ( isset( json_decode( wp_remote_retrieve_body( $response ) )->related_objects ) ) {
+				$respons_body[] = wp_json_encode( json_decode( wp_remote_retrieve_body( $response ) )->related_objects );
+			}
+		} elseif ( ! empty( wp_remote_retrieve_body( $response ) ) ) {
+
+			$respons_body[] = wp_remote_retrieve_body( $response );
+
+		}
+
+		if ( 'GET' === $method || 'POST' === $method ) {
+			$postheaders               = '';
+			$wp_remote_retrieve_header = wp_remote_retrieve_headers( $response );
+			foreach ( $wp_remote_retrieve_header as $w_header ) {
+				$postheaders .= esc_html( $w_header );
+			}
+
+			if ( ! empty( json_decode( wp_remote_retrieve_body( $response ) )->cursor ) ) {
+
+				if ( 'GET' === $method && ! empty( $args ) && is_array( $args ) ) {
+					$url = add_query_arg( $args, $url );
+				} elseif ( ! empty( $args ) ) {
+						$args           = $args;
+						$args['cursor'] = json_decode( wp_remote_retrieve_body( $response ) )->cursor;
+				} else {
+					$args = array(
+						'cursor' => json_decode( wp_remote_retrieve_body( $response ) )->cursor,
+					);
+				}
+
+				if ( ! empty( $args ) ) {
+					$response = $this->wp_remote_woosquare_v2( $url, $args, $method, $headers, $respons_body );
+				}
+			} elseif ( false !== strpos( $postheaders, 'batch_token' ) ) {
+				$batch_token = explode( 'batch_token', $postheaders );
+				$batch_token = explode( '>', $batch_token[1] );
+				$batch_token = str_replace( '=', '', $batch_token[0] );
+				$args        = array(
+					'batch_token' => $batch_token,
+				);
+
+				if ( ! empty( $batch_token ) ) {
+					$response = $this->wp_remote_woosquare_v2( $url, $args, $method, $headers, $respons_body );
+				}
+			} else {
+				$merge = array();
 
 				foreach ( $respons_body as $formerge ) {
 					if ( ! empty( $merge ) ) {
@@ -331,9 +415,9 @@ class Square {
 				}
 
 				if ( ! is_wp_error( $response ) ) {
-						$response['body'] = wp_json_encode( $merge );
+					$response['body'] = wp_json_encode( $merge );
 
-						return $response;
+					return $response;
 				} else {
 					update_option( 'wp_remote_woosquare_get_error_message_' . gmdate( 'Y-m-d H:i:s' ), $response->get_error_message() );
 					return false;
@@ -341,7 +425,7 @@ class Square {
 			}
 		}
 		if ( ! is_wp_error( $response ) ) {
-				return $response;
+			return $response;
 		} else {
 			update_option( 'wp_remote_woosquare_get_error_message_' . gmdate( 'Y-m-d H:i:s' ), $response->get_error_message() );
 			return false;
@@ -375,14 +459,14 @@ class Square {
 	 */
 	public function get_all_locations() {
 
-		$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/locations';
-		$method  = 'GET';
-		$headers = array(
-			'Authorization' => 'Bearer ' . $this->access_token, // Use verbose mode in cURL to determine the format you want for this header.
-			'cache-control' => 'no-cache',
-			'postman-token' => 'f39c2840-20f3-c3ba-554c-a1474cc80f12',
+		$url      = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/locations';
+		$method   = 'GET';
+		$headers  = array(
+			'Authorization'  => 'Bearer ' . $this->access_token, // Use verbose mode in cURL to determine the format you want for this header.
+			'cache-control'  => 'no-cache',
+			'postman-token'  => 'f39c2840-20f3-c3ba-554c-a1474cc80f12',
+			'Square-Version' => '2024-07-17',
 		);
-
 		$response = array();
 		$args     = array( '' );
 		$response = $this->wp_remote_woosquare( $url, $args, $method, $headers, $response );
@@ -436,7 +520,8 @@ class Square {
 		$order = new WC_Order( $order_id );
 		$items = $order->get_items();
 
-		if ( $order->get_created_via() === 'Square' ) {
+		$woocommerce_square_payment_reporting = get_option( 'woocommerce_square_payment_reporting' );
+		if ( 1 === $woocommerce_square_payment_reporting ) {
 			return;
 		}
 		$woo_square_location_id = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
@@ -469,13 +554,18 @@ class Square {
 	}
 
 	/**
-	 * Refunds a WooCommerce order using the Square API.
+	 * Processes a refund for a WooCommerce order and synchronizes inventory with Square.
 	 *
-	 * @param int $order_id The ID of the WooCommerce order to refund.
+	 * This function handles the refund process for a WooCommerce order by updating inventory levels
+	 * in Square, creating the refund request via the Square API, and updating the order metadata with
+	 * refund details.
 	 *
-	 * @return mixed The result of the refund operation.
+	 * @param int $order_id  The ID of the WooCommerce order being refunded.
+	 * @param int $refund_id The ID of the WooCommerce refund being processed.
+	 *
+	 * @return void
 	 */
-	public function refund( $order_id ) {
+	public function refund( $order_id, $refund_id ) {
 
 		$order                  = new WC_Order( $order_id );
 		$items                  = $order->get_items();
@@ -494,7 +584,8 @@ class Square {
 
 					$square_synchronizer->update_inventory( $variation, 1 * $item['qty'], 'RECEIVE_STOCK', $woo_square_location_id );
 					$product = wc_get_product( $item['variation_id'] );
-					wc_update_product_stock( $product, $total_stock );
+					wc_increase_stock_levels( $order_id );
+
 				}
 			} elseif ( get_post_meta( $item['product_id'], '_manage_stock', true ) === 'yes' ) {
 					$product_variation_id    = get_post_meta( $item['product_id'], 'variation_square_id', true );
@@ -506,23 +597,78 @@ class Square {
 					$total_stock   = $current_stock + $item['qty'];
 
 					$product = wc_get_product( $item['product_id'] );
-					wc_update_product_stock( $product, $total_stock );
+					wc_increase_stock_levels( $order_id );
 			}
 		}
+
+		$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
+		$token                            = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		if ( ! empty( $order->get_meta( 'woosquare_transaction_id', true ) ) ) {
+			$payment_id = $order->get_meta( 'woosquare_transaction_id', true );
+		} else {
+			$payment_id = $order->get_meta( 'square_payment_id', true );
+		}
+		$fields  = array(
+			'idempotency_key' => uniqid(),
+			'payment_id'      => $payment_id,
+			'reason'          => 'Returned Goods',
+			'amount_money'    => array(
+				'amount'   => ( get_post_meta( $refund_id, '_refund_amount', true ) * 100 ),
+				'currency' => $order->get_meta( '_order_currency', true ),
+			),
+		);
+		$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/refunds';
+		$headers = array(
+			'Square-Version' => '2022-05-12',
+			'Accept'         => 'application/json',
+			'Authorization'  => 'Bearer ' . $token,
+			'Content-Type'   => 'application/json',
+			'Cache-Control'  => 'no-cache',
+		);
+
+		$refund_obj = json_decode(
+			wp_remote_retrieve_body(
+				wp_remote_post(
+					$url,
+					array(
+						'method'      => 'POST',
+						'headers'     => $headers,
+						'httpversion' => '1.0',
+						'sslverify'   => false,
+						'body'        => wp_json_encode( apply_filters( 'modify_square_refund_fields', $fields ) ),
+					)
+				)
+			)
+		);
+
+		if ( 'APPROVED' === $refund_obj->refund->status || 'PENDING' === $refund_obj->refund->status ) {
+			// translators: %1$s is the refunded amount, %2$s is the refund ID.
+			$refund_message = sprintf( __( 'Refunded %1$s - Refund ID: %2$s ', 'wpexpert-square' ), wc_price( $refund_obj->refund->amount_money->amount / 100 ), $refund_obj->refund->id );
+			$order->update_meta_data( 'refund_created_at', $refund_obj->refund->created_at );
+			$order->update_meta_data( 'refund_created_id', $refund_obj->refund->id );
+			$order->add_order_note( $refund_message );
+		}
+
+		// }
+		$order->save();
 	}
 
 	/**
 	 * Process amount to be passed to Square.
 	 *
-	 * @param  float  $total     The amount to be processed.
-	 * @param  string $direc    Direction indicator ('wotosq' or 'sqtowo').
-	 * @param  string $currency (Optional) Currency code. If not provided, WooCommerce currency is used.
+	 * @param float  $total    The total amount to be formatted.
+	 * @param string $direc    The direction or a specific value related to the amount (e.g., "USD").
+	 * @param string $currency The currency code (optional).
 	 *
-	 * @return float            The processed amount.
+	 * @return float The formatted amount.
 	 */
 	public function format_amount( $total, $direc, $currency = '' ) {
 		if ( ! $currency ) {
 			$currency = get_woocommerce_currency();
+		}
+
+		if ( gettype( $total ) === 'string' ) {
+			$total = (float) $total; // In cents.
 		}
 
 		switch ( strtoupper( $currency ) ) {
@@ -550,10 +696,8 @@ class Square {
 				} elseif ( 'sqtowo' === $direc ) {
 					$total = round( $total, 2 ) / 100; // In cents.
 				}
-
 				break;
 		}
-
 		return $total;
 	}
 }

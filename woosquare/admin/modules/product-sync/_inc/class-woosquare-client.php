@@ -109,10 +109,6 @@ class WooSquare_Client {
 	 * @return string The Square API base URL.
 	 */
 	public function get_api_url_base() {
-		if ( WC_SQUARE_ENABLE_STAGING ) {
-			return apply_filters( 'woocommerce_square_api_url', 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/' );
-		}
-
 		return apply_filters( 'woocommerce_square_api_url', 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/' );
 	}
 
@@ -204,8 +200,6 @@ class WooSquare_Client {
 	public function request( $debug_label, $path, $method = 'GET', $body = null ) {
 		// we need to check for cURL.
 		if ( ! function_exists( 'curl_init' ) ) {
-			WooSquare_Sync_Logger::log( 'cURL is not available. Sync aborted. Please contact your host to install cURL.' );
-
 			return false;
 		}
 
@@ -273,9 +267,7 @@ class WooSquare_Client {
 		$request_args = $this->get_request_args();
 
 		if ( ! is_null( $body ) ) {
-
 			$request_args['body'] = $body;
-
 		}
 
 		// Make actual request in a retry loop.
@@ -289,30 +281,68 @@ class WooSquare_Client {
 
 			$end_time = time();
 
-			WooSquare_Sync_Logger::log( sprintf( '%s', $debug_label ), $start_time, $end_time );
-
 			// check for error request and log it.
 			if ( is_object( $parsed_response['decoded_body'] ) && ! empty( $parsed_response['decoded_body']->type ) ) {
 				if ( preg_match( '/bad_request/', $parsed_response['decoded_body']->type ) || preg_match( '/not_found/', $parsed_response['decoded_body']->type ) ) {
-					WooSquare_Sync_Logger::log( sprintf( '%s - %s', $parsed_response['decoded_body']->type, $parsed_response['decoded_body']->message ), $start_time, $end_time );
+					return false;
+				}
+			}
 
+			// handle expired tokens.
+			if ( is_object( $parsed_response['decoded_body'] ) &&
+				(
+					( ! empty( $parsed_response['decoded_body']->type ) && 'oauth.expired' === $parsed_response['decoded_body']->type ) ||
+					( ! empty( $parsed_response['decoded_body']->errors ) && 'ACCESS_TOKEN_EXPIRED' === $parsed_response['decoded_body']->errors[0]->code )
+				)
+			) {
+
+				$oauth_connect_url = 'https://connect.woocommerce.com/renew/square';
+
+				if ( WOOSQU_ENABLE_STAGING ) {
+					$oauth_connect_url = 'https://connect.woocommerce.com/renew/squaresandbox';
+				}
+
+				$args = array(
+					'body'    => array(
+						'token' => $this->access_token,
+					),
+					'timeout' => 45,
+				);
+
+				$start_time            = time();
+				$parsed_oauth_response = $this->curl( $oauth_connect_url, $args, false, 'POST' );
+				$end_time              = time();
+
+				if ( $parsed_oauth_response['curl_error'] ) {
+					return false;
+				} elseif ( is_object( $parsed_oauth_response['decoded_body'] ) && ! empty( $parsed_oauth_response['decoded_body']->error ) ) {
+					return false;
+				} elseif ( 500 === $parsed_oauth_response['response_code'] ) {
+					return false;
+
+				} elseif ( is_object( $parsed_oauth_response['decoded_body'] ) && ! empty( $parsed_oauth_response['decoded_body']->access_token ) ) {
+					update_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ), sanitize_text_field( urldecode( $parsed_oauth_response['decoded_body']->access_token ) ) );
+
+					// let's set the token instance again so settings option is refreshed.
+					$this->set_access_token( sanitize_text_field( urldecode( $parsed_oauth_response['decoded_body']->access_token ) ) );
+					$request_args['headers']['Authorization'] = 'Bearer ' . sanitize_text_field( $this->get_access_token() );
+
+					// start at the beginning again.
+					continue;
+				} else {
 					return false;
 				}
 			}
 
 			// handle revoked tokens.
 			if ( is_object( $parsed_response['decoded_body'] ) && ! empty( $parsed_response['decoded_body']->type ) && 'oauth.revoked' === $parsed_response['decoded_body']->type ) {
-				WooSquare_Sync_Logger::log( sprintf( 'Token is revoked!' ), $start_time, $end_time );
-
 				return false;
 			}
 
 			if ( $parsed_response['curl_error'] ) {
-				WooSquare_Sync_Logger::log( sprintf( '(%s) Try #%d - %s', $debug_label, $try_count, $parsed_response['curl_error'] ), $start_time, $end_time );
+				return false;
 			} else {
-
 				return $parsed_response;
-
 			}
 
 			++$try_count;

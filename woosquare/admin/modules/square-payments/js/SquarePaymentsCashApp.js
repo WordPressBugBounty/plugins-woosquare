@@ -2,13 +2,13 @@
 	'use strict';
 
 	const cashapp_appId = square_cashapp_params.application_id;
-	const cashapp_locationId = square_cashapp_params.lid;
-	
+	const cashapp_location_id = square_cashapp_params.lid;
 	function buildPaymentRequest(payments) {
 
 		if(jQuery('form.wc-block-checkout__form').length > 0){
-			var id_of_div = jQuery('.wc-block-components-totals-item__value').html();
-			var total_price = id_of_div.split(square_cashapp_params.currency_symbl)[1];
+			var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html();
+			var total_price = id_of_div.split(square_cashapp_params.currency_sym)[1];
+			var total_price = total_price.replace(" ", "");
 			// var total = total.substring(1, total.length);
 			// var total_price = total.toString();
 		}else{
@@ -43,37 +43,33 @@
 			}
 			throw new Error(errorMessage);
 		}
-
 	}
 
 	let cashAppPay;
+	
 	async function initializeCashApp(payments) {
-		
-		if(cashAppPay != undefined){
+		if(jQuery('#cash-app-pay').html().length > 1){
 			cashAppPay.destroy();
 		}
-
+		// jQuery('#cash-app-pay').html('');
 		const paymentRequest = buildPaymentRequest(payments);
-		const buttonOptions = {
-			shape: 'semiround',
-			width: 'full',
-		};
 		cashAppPay = await payments.cashAppPay(paymentRequest,{
 			redirectURL: square_cashapp_params.checkout_url,
+			// referenceId: 'my-website-00000001',
 		});
 		
 		setTimeout(function(){
-			jQuery('#rendering_cashapp_gateway').hide();
-			cashAppPay.attach('#cash-app-pay', buttonOptions);
 			
-			jQuery('#cashapp-initialization').hide();
+			// if(jQuery('#cash-app-pay').html().length == 0){
+				cashAppPay.attach('#cash-app-pay');
+				jQuery('#cashapp-initialization').hide();
+			// } else {
+				// cashAppPay.destroy();
+			// }
 			cashAppPay.addEventListener('ontokenization', function (event) {
 				const { tokenResult, error } = event.detail;
-				if (error) {
-					// developer handles error
-					//console.log('error' + error);
-				}
-				else if (tokenResult.status === 'OK') {
+			
+				if (tokenResult.status === 'OK') {
 					// developer passes token to backend for use with CreatePayment
 					var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
 					$form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
@@ -86,29 +82,26 @@
 					}
 				}
 			});
-		}, 1000);
-		// return cashAppPay;
 
+		}, 2000);
+		return cashAppPay;
 	}
-/* 
-	function init_cashapp(cashAppPay,payments){
-		
+	// let cashAppPay;
+	function initca(payments){
 		try {
 			cashAppPay = initializeCashApp(payments);
 		} catch (e) {
 			console.error('Initializing Cash App Pay failed', e);
 		}
-
 	}
- */
-	// document.addEventListener('DOMContentLoaded', async function () {
+
 	jQuery( window  ).on("load", function() {
 
 		if (!window.Square) {
 			throw new Error('Square.js failed to load properly');
 		}
 
-		const payments = window.Square.payments(cashapp_appId, cashapp_locationId);
+		const payments = window.Square.payments(cashapp_appId, cashapp_location_id);
 		if(jQuery('.payment_method_square_ach_payment'+square_cashapp_params.sandbox ).length == 0){ 
 			jQuery( document.body ).on( 'updated_checkout', function() {
 				// jQuery('input[type=radio][name=payment_method]').on('change', function(){
@@ -129,7 +122,7 @@
 							jQuery('#cash-app-pay').html('CashApp payment already generated');
 							var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
 							// $form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
-							if(jQuery('form.wc-block-checkout__form').length > 0){
+							if(jQuery('form.wc-block-checkout__form') ){
 								if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox){
 									jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
 								}
@@ -152,27 +145,34 @@
 				// })
 			})
 		}
-		if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
-			try {
-				if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
-					
-						jQuery('#cashapp-initialization').show();
-					cashAppPay = initializeCashApp(payments);
-				}
-			} catch (e) {
-				jQuery('#cashapp-initialization').hide();
-				console.error('Initializing Cash App Pay failed', e);
-			}
-			if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
-				if(jQuery('.woocommerce-error').length > 0 && jQuery('.cashapp-square-nonce').val()){ 
-					jQuery('#cash-app-pay').html('CashApp payment already generated');
-					var $form = jQuery('form.woocommerce-checkout, form#order_review');
-					// $form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
-					$form.submit();
-				} 
-			}
+		const pollCashAppCondition = setInterval(() => {
+			const isCashAppSelected = jQuery('.woocommerce-checkout-payment .input-radio:checked').val() === 'square_cash_app_pay' + square_cashapp_params.sandbox;
+			const $cashappDiv = jQuery('#cash-app-pay');
+			const $errorBox = jQuery('.woocommerce-error');
+			const $nonceField = jQuery('.cashapp-square-nonce');
+			if (isCashAppSelected || $cashappDiv.length > 0) { 
+				
+				console.log("✅ Cash App condition checking, initializing...");
+				clearInterval(pollCashAppCondition); // Stop polling
 
-		}
+				try {
+					jQuery('#cashapp-initialization').show();
+					cashAppPay = initializeCashApp(payments); // Initialize your Cash App Pay
+				} catch (e) {
+					jQuery('#cashapp-initialization').hide();
+					console.error('❌ Initializing Cash App Pay failed:', e);
+				}
+
+				// Check for error and nonce
+				if ($errorBox.length > 0 && $nonceField.val()) {
+					jQuery('#cash-app-pay').html('CashApp payment already generated');
+
+					const $form = jQuery('form.woocommerce-checkout, form#order_review');
+					$form.submit();
+				}
+			}
+		}, 500); // Check every 500ms
+
 		$('form.checkout').on('change', '.woocommerce-checkout-payment input', function(){
 			if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
 				try {
@@ -195,6 +195,35 @@
 
 			}
 		});
+		jQuery(document).on('change', 'body.woocommerce-checkout', function() {
+			setTimeout(() => {
+				if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
+					try {
+						if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
+							jQuery('#cashapp-initialization').show();
+							cashAppPay = initializeCashApp(payments);
+						}
+					} catch (e) {
+						jQuery('#cashapp-initialization').hide();
+						console.error('Initializing Cash App Pay failed', e);
+					}
+					if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
+						if(jQuery('.woocommerce-error').length > 0 && jQuery('.cashapp-square-nonce').val()){ 
+							jQuery('#cash-app-pay').html('CashApp payment already generated');
+							var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
+							// $form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
+							if(jQuery('form.wc-block-checkout__form') ){
+								if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox){
+									jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
+								}
+							}else{
+								$form.submit();
+							}
+						} 
+					}
+				}
+			}, 1000);
+		})
 		jQuery('form.wc-block-checkout__form').on('change', "input[name=radio-control-wc-payment-method-options]", function(){
 			if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox ){
 				try {
@@ -211,7 +240,7 @@
 						jQuery('#cash-app-pay').html('CashApp payment already generated');
 						var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
 						// $form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
-						if(jQuery('form.wc-block-checkout__form').length > 0){
+						if(jQuery('form.wc-block-checkout__form') ){
 							if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_cash_app_pay'+square_cashapp_params.sandbox){
 								jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
 							}
@@ -225,3 +254,5 @@
 	});
 
 }( jQuery ) );
+
+

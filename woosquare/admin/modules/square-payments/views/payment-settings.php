@@ -9,24 +9,24 @@
  */
 
 ?>
-
 <div class="bodycontainerWrap">
+
 
 	<div class="bodycontainer">
 
 		<div id="tabs" class="md-elevation-4dp bg-theme-primary">
 			<?php
-			$woosquare_plus = new woosquare_plus();
+			$woosquare_plus = new Woosquare_Plus();
 			echo wp_kses_post( $woosquare_plus->wooplus_get_toptabs() );
 			?>
-			
-		</div>
 
+		</div>
 
 		<?php
 			$data = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
 			parse_str( $data, $query_params );
 		?>
+
 		<div class="welcome-panel <?php echo isset( $query_params['page'] ) ? esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ) ) ) : ''; ?>">
 
 			<h1 class="m-0"><svg height="20px" viewBox="0 0 512 511" width="20px" xmlns="http://www.w3.org/2000/svg">
@@ -48,7 +48,7 @@
 			<form action="<?php echo esc_url( get_admin_url() ); ?>admin-post.php" method="post">
 				<input type="hidden" name="action" value="add_foobar">
 				<?php
-				if ( isset( $square_payment_settin['enabled'] ) && 'yes' === $square_payment_settin['enabled'] ) {
+				if ( ! empty( $square_payment_settin ) ) {
 
 					$unserialize_array = $square_payment_settin;
 
@@ -56,24 +56,24 @@
 
 					$unserialize_array = array(
 						'enabled'            => 'no',
-						'title'              => __( 'Credit card (Square)', 'woosquare' ),
-						'description'        => __( 'Pay with your credit card via Square.', 'woosquare' ),
+						'title'              => 'Credit card (Square)',
+						'description'        => 'Pay with your credit card via Square.',
 						'capture'            => 'no',
 						'create_customer'    => 'no',
 						'google_pay' . get_transient( 'is_sandbox' ) . '_enabled' => 'no',
-						'after_pay' . get_transient( 'is_sandbox' ) . '_enabled' => 'no',
+						'gift_card_enabled'  => 'no',
+						'after_pay_enabled'  => 'no',
 						'cash_app_pay' . get_transient( 'is_sandbox' ) . '_enabled' => 'no',
-						'gift_card' . get_transient( 'is_sandbox' ) . '_enabled' => 'no',
 						'Send_customer_info' => 'no',
 						'logging'            => 'no',
-					);}
-
+					);
+				}
 				?>
 
 				<div class="formWrap">
 					<ul>
 						<li>
-							<strong>Square Payment Gateway</strong>
+							<strong>Enable/Disable</strong>
 							<div class="elementBlock">
 								<fieldset>
 
@@ -81,7 +81,7 @@
 									<label for="woocommerce_square_enabled">
 										<input type="checkbox" name="woocommerce_square_enabled"
 												id="woocommerce_square_enabled" value="1"
-												<?php checked( 'yes' === $unserialize_array['enabled'] ?? null ); ?> />Enable
+												<?php checked( 'yes', $unserialize_array['enabled'] ?? '' ); ?> />Enable
 										Square</label><br>
 								</fieldset>
 							</div>
@@ -136,7 +136,7 @@
 
 										<input type="checkbox" name="woocommerce_square_capture"
 												id="woocommerce_square_capture" value="1"
-												<?php checked( 'yes' === $unserialize_array['capture'] ?? null ); ?> />Enable Delay
+												<?php checked( 'yes', $unserialize_array['capture'] ?? '' ); ?> />Enable Delay
 										Capture</label><br>
 
 
@@ -159,7 +159,7 @@
 
 										<input type="checkbox" name="woocommerce_square_create_customer"
 												id="woocommerce_square_create_customer" value="1"
-												<?php checked( 'yes' === $unserialize_array['create_customer'] ) ?? null; ?> />Enable
+												<?php checked( 'yes', $unserialize_array['create_customer'] ?? '' ); ?> />Enable
 										Create Customer</label>
 
 
@@ -180,7 +180,7 @@
 
 										<input type="checkbox" name="woocommerce_square_logging"
 												id="woocommerce_square_logging" value="1"
-												<?php checked( 'yes' === $unserialize_array['logging'] ?? null ); ?> />Log debug
+												<?php checked( 'yes', $unserialize_array['logging'] ?? '' ); ?> />Log debug
 										messages</label>
 
 
@@ -189,9 +189,57 @@
 							</div>
 
 						</li>
-						
+						<?php
+						$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );
+						if ( ! $activate_modules_woosquare_plus['woosquare_transaction_addon']['module_activate'] ) {
+							?>
+							<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+							<li>
+
+
+
+								<strong>Send Customer Info</strong>
+								<p class="description ext">Send first name last name with order to square.</p>
+								<div class="elementBlock">
+									<fieldset>
+										<legend class="screen-reader-text"><span>Send Customer Info</span></legend>
+										<label for="Send_customer_info">
+											<input type="checkbox" name="Send_customer_info" id="Send_customer_info"
+													value="1"
+								<?php checked( 'yes', $unserialize_array['Send_customer_info'] ?? '' ); ?> />Send
+											first name last name</label>
+
+									</fieldset>
+								</div>
+
+
+
+
+							</li>
+							<?php } ?>
+						<?php } ?>
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
 						<li>
-							<strong>Google Pay</strong>
+							<strong> Enable/Disable Payment Reporting </strong>
+							<p class="description ext">Click below button to enable payment reporting.</p>
+							<div class="elementBlock">
+								<fieldset>
+
+									<legend class="screen-reader-text"><span></span></legend>
+
+									<label for="payment_reporting">
+
+										<input type="checkbox" name="woocommerce_square_payment_reporting"
+												id="payment_reporting" value="1"
+												<?php checked( 'yes' === $woocommerce_square_payment_reporting ); ?> /> Enable Payment Reporting </label><br>
+
+								</fieldset>
+							</div>
+
+						</li>
+						<?php } ?>
+						<li>
+							<strong>Enable/Disable Google Pay</strong>
 							<p class="description ext">Click below button to enable Google Pay.</p>
 							<div class="elementBlock">
 								<fieldset>
@@ -202,77 +250,53 @@
 
 										<input type="checkbox" name="woocommerce_square_google_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
 												id="google_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
-												<?php checked( 'yes' === $square_payment_setting_google_pay['enabled'] ); ?> />Enable Google Pay</label><br>
+												<?php checked( isset( $square_payment_setting_google_pay['enabled'] ) && 'yes' === $square_payment_setting_google_pay['enabled'] ); ?> />Enable Google Pay</label><br>
 
 								</fieldset>
 							</div>
 
 						</li>
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+						<li>
+							<strong>Enable/Disable Gift Card</strong>
+							<p class="description ext">Click below button to enable Gift Card .</p>
+							<div class="elementBlock">
+								<fieldset>
+
+									<legend class="screen-reader-text"><span></span></legend>
+
+									<label for="gift_card_enabled">
+
+										<input type="checkbox" name="woocommerce_square_gift_card_pay_enabled<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>"
+												id="gift_card_enabled" value="1"
+												<?php checked( isset( $woocommerce_square_gift_card_pay_enabled ) && 'yes' === $woocommerce_square_gift_card_pay_enabled ); ?> />Enable Gift Card</label><br>
+
+								</fieldset>
+							</div>
+
+						</li>
+						<?php } ?>
 
 						<li>
 							<strong>Enable/Disable ACH Payment</strong>
 							<p class="description ext">Click below button to enable ACH Payment.</p>
 							<div class="elementBlock">
 								<fieldset>
-								
+
 									<legend class="screen-reader-text"><span></span></legend>
 
 									<label for="ach_payment<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled">
 
 										<input type="checkbox" name="woocommerce_square_ach_payment<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
-												id="ach_payment<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
-												<?php
-												checked( 'yes' === $woocommerce_square_ach_payment_settings['enabled'] );
-												?>
-												/>Enable ACH Payment</label><br>
-
+																								id="ach_payment<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
+																								<?php checked( isset( $woocommerce_square_ach_payment_settings['enabled'] ) && 'yes' === $woocommerce_square_ach_payment_settings['enabled'] ); ?> />Enable ACH Payment</label><br>
 								</fieldset>
 							</div>
 
 						</li>
 
 						<li>
-							<strong>Enable/Disable After Pay</strong>
-							<p class="description ext">Click below button to enable After Pay.</p>
-							<div class="elementBlock">
-								<fieldset>
-								
-									<legend class="screen-reader-text"><span></span></legend>
-
-									<label for="after_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled">
-
-										<input type="checkbox" name="woocommerce_square_after_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
-												id="after_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
-												<?php checked( 'yes' === $woocommerce_square_after_pay_settings['enabled'] ); ?> />Enable After Pay</label><br>
-
-								</fieldset>
-							</div>
-
-						</li>
-
-						<li>
-							<strong>Enable/Disable CashApp Pay</strong>
-							<p class="description ext">Click below button to enable CashApp Pay.</p>
-							<div class="elementBlock">
-								<fieldset>
-								
-									<legend class="screen-reader-text"><span></span></legend>
-
-									<label for="cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled">
-
-										<input type="checkbox" name="woocommerce_square_cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
-												id="cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
-												<?php
-												checked( 'yes' === $woocommerce_square_cash_app_pay_settings['enabled'] );
-												?>
-												/>Enable CashApp Pay</label><br>
-
-								</fieldset>
-							</div>
-
-						</li>
-						<li>
-							<strong>Apple Pay</strong>
+							<strong>Enable/Disable Apple Pay</strong>
 							<p class="description ext">Click below button to enable Apple Pay.</p>
 							<div class="elementBlock">
 								<fieldset>
@@ -284,20 +308,117 @@
 										<input type="checkbox" name="woocommerce_square_apple_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
 												id="apple_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
 												<?php
-												checked( 'yes' === $woocommerce_square_apple_pay_enabled['enabled'] );
+												checked( isset( $woocommerce_square_apple_pay_enabled['enabled'] ) && 'yes' === $woocommerce_square_apple_pay_enabled['enabled'] );
 												?>
-												/>Enable Apple Pay </label><br>
+												/>Enable Apple Pay </label><br><br>
+												<button class="apple_verify_domain" style="display:none;">Verify domain</button>
+												<p class="apple_domain_error_test"></p>
+												<input type="hidden" id="apple_domain_verification" name="apple_domain_verification" value="<?php echo esc_attr( wp_create_nonce( 'apple-domain-verification-nonce' ) ); ?>" />
 
 								</fieldset>
 							</div>
 
 						</li>
-					</ul>
-
-
-					
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+						<li>
+							<strong>Select button color</strong>
+							<p class="description ext">This will apply on Apple and Google Pay buttons.</p>
+							<div class="elementBlock">
+								<fieldset>
+									<legend class="screen-reader-text"><span>Select Button Color</span></legend>
+									<select name="woocommerce_square_button_color" id="woocommerce_square_button_color">
+										<option value="black" <?php selected( $unserialize_array['button_color'] ?? 'black', 'black' ); ?>>Black</option>
+										<option value="white" <?php selected( $unserialize_array['button_color'] ?? 'black', 'white' ); ?>>White</option>
+									</select>
+									<br>
+								</fieldset>
+							</div>
+						</li>
 						
+						<li>
+							<strong>Enable Express Checkout</strong>
+							<p class="description ext">
+								To enable express checkout on the product and cart page, make sure Google Pay and Apple Pay payment gateways are enabled.
+							</p>
+							<div class="elementBlock">
+								<fieldset>
+									<legend class="screen-reader-text"><span>Enable digital wallets.</span></legend>
+									<label for="apple_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_expressch_enabled">
+										<input type="checkbox" name="woocommerce_square_apple_pay_expressch_enabled"
+												id="apple_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_expressch_enabled" value="1"
+											<?php checked( isset( $unserialize_array['express_checkout_enabled'] ) && 'yes' === $unserialize_array['express_checkout_enabled'] ); ?> />
+										Enable digital wallet
+										<span style="font-weight: bold; margin-left: 10px;">Express Checkout</span>
+									</label>
+								</fieldset>
+							</div>
+						</li>
+						<?php } ?>
+						<li>
+							<strong>Enable/Disable After Pay</strong>
+							<p class="description ext">Click below button to enable After Pay. Only USD,CAD,AUD,GBP currency support and merchant account must be onboarded on square!</p>
+							<div class="elementBlock">
+								<fieldset>
 
+									<legend class="screen-reader-text"><span></span></legend>
+
+									<label for="after_pay_enabled">
+
+										<input type="checkbox" name="woocommerce_square_after_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
+												id="after_pay_enabled" value="1"
+												<?php
+												checked( isset( $woocommerce_square_after_pay_settings['enabled'] ) && 'yes' === $woocommerce_square_after_pay_settings['enabled'] );
+												?>
+												/>Enable After Pay </label><br>
+								</fieldset>
+							</div>
+
+						</li>
+
+						<li>
+							<strong>Enable/Disable CashApp Pay</strong>
+							<p class="description ext">Click below button to enable CashApp Pay. Only US ($) currency support!</p>
+							<div class="elementBlock">
+								<fieldset>
+
+									<legend class="screen-reader-text"><span></span></legend>
+
+									<label for="cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled">
+
+										<input type="checkbox" name="woocommerce_square_cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
+												id="cash_app_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
+												<?php
+												checked( isset( $woocommerce_square_cash_app_pay_settings['enabled'] ) && 'yes' === $woocommerce_square_cash_app_pay_settings['enabled'] );
+												?>
+												/>Enable CashApp Pay </label><br>
+								</fieldset>
+							</div>
+
+						</li>
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+						<li>
+							<strong>Enable/Disable POS Pay</strong>
+							<p class="description ext">Click below button to POS Pay.</p>
+							<div class="elementBlock">
+								<fieldset>
+
+									<legend class="screen-reader-text"><span></span></legend>
+
+									<label for="terminal_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled">
+
+										<input type="checkbox" name="woocommerce_square_pos<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled"
+												id="terminal_pay<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>_enabled" value="1"
+												<?php
+												checked( isset( $woocommerce_square_terminal_pay['enabled'] ) && 'yes' === $woocommerce_square_terminal_pay['enabled'] );
+												?>
+												/>Enable POS Pay </label><br>
+
+								</fieldset>
+							</div>
+
+						</li>
+						<?php } ?>
+					</ul>
 
 						<div class="row m-t-20">
 							<div class="col-md-6">
@@ -316,10 +437,6 @@
 
 				</div>
 				<?php wp_nonce_field( 'woosquare_setting_nonce', 'woosquare_setting' ); ?>
-				<!-- <table class="form-table"> -->
-
-				<!-- <tbody> -->
-				
 			</form>
 
 		</div>

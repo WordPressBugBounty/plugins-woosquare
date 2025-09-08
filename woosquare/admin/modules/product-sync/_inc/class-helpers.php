@@ -8,8 +8,6 @@
 
 /**
  * Description of Helpers
- *
- * @author Omar ELsayed <omarelsayed1992@gmail.com>
  */
 class Helpers { // phpcs:ignore
 
@@ -29,9 +27,9 @@ class Helpers { // phpcs:ignore
 	const SYNC_DIRECTION_SQUARE_TO_WOO = 1;
 
 	/**
-	 * Stores an array of sync directions.
+	 * Stores an array of target types for synchronization.
 	 *
-	 * @var array $sync_directions An array of sync directions, such as `woo_to_square` and `square_to_woo`.
+	 * @var array $target_types An array of target types, such as `product`, `order`, and `customer`.
 	 */
 	protected $sync_directions;
 
@@ -107,7 +105,7 @@ class Helpers { // phpcs:ignore
 	 *
 	 * @return array An array of synchronization types.
 	 */
-	public function getsync_types() {
+	public function get_sync_types() {
 		return $this->sync_types;
 	}
 
@@ -228,45 +226,5 @@ class Helpers { // phpcs:ignore
 	public static function debug_log( $type, $data ) {
 		$print_r = 'print_r';
 		error_log( "[$type] [" . gmdate( 'Y-m-d H:i:s' ) . '] ' . $print_r( $data, true ) . "\n", 3, __DIR__ . '/../logs.log' ); // phpcs:ignore
-	}
-
-	/**
-	 * Log synchronization information to the database.
-	 *
-	 * @global object $wpdb
-	 * @param integer      $action The action code for the synchronization.
-	 * @param string       $date The date and time of the synchronization.
-	 * @param integer      $sync_type The synchronization type.
-	 * @param integer      $sync_direction The synchronization direction.
-	 * @param integer|null $target_id The ID of the synchronized target (if applicable).
-	 * @param integer|null $target_type The type of the synchronized target (if applicable).
-	 * @param integer|null $target_status The status of the synchronized target (if applicable).
-	 * @param integer      $parent_id The log parent ID (use 0 if none).
-	 * @param string|null  $name The name of the synchronized object (if applicable).
-	 * @param string|null  $square_id The square ID (if applicable).
-	 * @param string|null  $message Additional synchronization message (if applicable).
-	 * @return integer The inserted row ID.
-	 */
-	public static function sync_db_log( $action, $date, $sync_type, $sync_direction, $target_id = null, $target_type = null, $target_status = null, $parent_id = 0, $name = null, $square_id = null, $message = null ) {
-
-		global $wpdb;
-		$insert = 'insert';
-		$wpdb->$insert(
-			$wpdb->prefix . WOO_SQUARE_TABLE_SYNC_LOGS,
-			array(
-				'action'         => $action,
-				'date'           => $date,
-				'sync_type'      => $sync_type,
-				'sync_direction' => $sync_direction,
-				'name'           => $name,
-				'target_id'      => $target_id,
-				'target_type'    => $target_type,
-				'target_status'  => $target_status,
-				'parent_id'      => $parent_id,
-				'square_id'      => $square_id,
-				'message'        => $message,
-			)
-		);
-		return $wpdb->insert_id;
 	}
 }

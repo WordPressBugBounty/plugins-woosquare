@@ -11,6 +11,10 @@
         const ach = await payments.ach({ redirectURI, transactionId });
         // Note: ACH does not have an .attach(...) method
         // the ACH auth flow is triggered by .tokenize(...)
+
+        if(jQuery('.ach-button-div').html('').length > 1){
+			jQuery('.ach-button-div').html('');
+		}
         jQuery('.ach-button-div').append('<button id="ach-button">Pay with Bank Account</button>');
         jQuery('#ach-initialization').hide();
         const achButton = document.getElementById('ach-button');
@@ -156,12 +160,12 @@
         
         if(jQuery('form.wc-block-checkout__form').length > 0) { 
             var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html();
-            var total = id_of_div.split(square_ach_params.currency_symbl)[1];
+            var total = id_of_div.split(square_ach_params.currency_sym)[1];
             var total_price = parseFloat(total) * 100;
             // var total = total.substring(1, total.length);
             // var total_price = total.toString();
         }else{
-            var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').html();
+            var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount').html();
             var total = id_of_div.split("span")[2];
             var total = total.substring(1, total.length);
             var total_price = total.toString();
@@ -235,11 +239,18 @@
                 }
             }
         }
-        setTimeout(
-            () => {
-            initializeACHWrapper();
-            }, 500
-        );
+        const pollACHInit = setInterval(() => {
+            const $achDiv = jQuery('.ach-button-div');
+
+            if ($achDiv.length > 0) {
+                console.log("✅ .ach-button-div found, initializing ACH...");
+
+                clearInterval(pollACHInit); // ✅ Stop interval
+
+                initializeACHWrapper(); // ✅ Run your logic
+            }
+        }, 500); // Check every 500ms
+
         $('form.checkout').on(
             'change', '.woocommerce-checkout-payment input', function () {
             

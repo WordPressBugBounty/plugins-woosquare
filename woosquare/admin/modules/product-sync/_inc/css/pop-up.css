@@ -22,7 +22,7 @@ xpopup
   -webkit-transition: opacity 0.3s 0s, visibility 0s 0s;
   -moz-transition: opacity 0.3s 0s, visibility 0s 0s;
   transition: opacity 0.3s 0s, visibility 0s 0s;
-	z-index: 9999;
+    z-index: 9999;
 }
 
 .cd-popup-container {
@@ -63,7 +63,28 @@ xpopup
 .cd-popup-container .cd-buttons li.liWide {
   width: 100%;
 }
-
+.cd-popup-container .cd-buttons button {
+  /* display: block;
+  height: 60px;
+  line-height: 60px;
+  text-transform: uppercase;
+  color: #FFF;
+  -webkit-transition: background-color 0.2s;
+  -moz-transition: background-color 0.2s;
+  transition: background-color 0.2s; */
+}
+.cd-popup-container .cd-buttons li:first-child button {
+  /* background: #fc7169;
+  border-radius: 0 0 0 .25em; */
+  
+}
+.no-touch .cd-popup-container .cd-buttons li:first-child button:hover {
+  /* background-color: #fc8982; */
+}
+.cd-popup-container .cd-buttons li:last-child button {
+  /* background: #b6bece;
+  border-radius: 0 0 .25em 0; */
+}
 .no-touch .cd-popup-container .cd-buttons li:last-child button:hover {
   background-color: #c5ccd8;
 }
@@ -117,6 +138,9 @@ p.submit.woosquare-auth-btn {
     background: white;
 }
 
+a.woo_square_sync_preference {
+    cursor: pointer;
+}
 @media only screen and (min-width: 1170px) {
   .cd-popup-container {
     margin: 5em auto;

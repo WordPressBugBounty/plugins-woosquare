@@ -17,11 +17,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return mixed Returns true if conditions are met, or a message if conditions are not met.
  */
 function check_sync_start_conditions() {
-
-	if ( ! get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
-		return 'Invalid square access token';
+	if ( empty( get_transient( 'is_sandbox' ) ) ) {
+		if ( ! get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
+			return 'Invalid square access token';
+		}
+	} elseif ( ! empty( get_transient( 'is_sandbox' ) ) ) {
+		if ( ! get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
+			return 'Invalid square access token';
+		}
 	}
-
 	if ( get_option( 'woo_square_running_sync' ) && ( time() - (int) get_option( 'woo_square_running_sync_time' ) ) < ( 20 * 60 ) ) {
 		return 'There is another Synchronization process running. Please try again later. Or <a href="' . admin_url( 'admin.php?page=square-item-sync&terminate_sync=true' ) . '" > terminate now </a>';
 	}
@@ -29,14 +33,12 @@ function check_sync_start_conditions() {
 	return true;
 }
 
-
 /**
  * Gets non-synchronized WooCommerce data.
  *
  * This function gets all WooCommerce data that has not yet been synchronized with Square.
  */
 function woo_square_plugin_get_non_sync_woo_data() {
-
 	if ( ! isset( $_REQUEST['woosquare_popup_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['woosquare_popup_nonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
 		exit();
 	}
@@ -44,10 +46,12 @@ function woo_square_plugin_get_non_sync_woo_data() {
 	$total_pages = 0;
 	$limit       = 0;
 	if ( true !== $check_flag ) {
-		die( wp_json_encode( array( 'error' => $check_flag ) ) ); }
+		die( wp_json_encode( array( 'error' => $check_flag ) ) );
+	}
+	$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 
-	$square                     = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
-	$synchronizer               = new WooToSquareSynchronizer( $square );
+	$synchronizer = new WooToSquareSynchronizer( $square );
+
 	$square_to_woo_synchronizer = new SquareToWooSynchronizer( $square );
 
 	// for display.
@@ -60,10 +64,19 @@ function woo_square_plugin_get_non_sync_woo_data() {
 	// display all products in update.
 	$one_products_update_checkbox = false;
 
-	// 1-get un-syncronized categories ( having is_square_sync = 0 or key not exists )
-	$categories        = $synchronizer->get_unsynchronized_categories();
-	$square_categories = $synchronizer->get_categories_square_ids( $categories );
+	// 1-get un-syncronized categories ( having is_square_sync = 0 or key not exists ).
+	$categories = get_transient( 'getUnsynchronizedCategories' );
+	if ( ! $categories ) {
 
+		$categories = $synchronizer->get_unsynchronized_categories();
+		set_transient( 'getUnsynchronizedCategories', $categories, 2400 );
+	}
+
+	$square_categories = get_transient( 'getCategoriesSquareIds' );
+	if ( ! $square_categories ) {
+		$square_categories = $synchronizer->get_categories_square_ids( $categories );
+		set_transient( 'getCategoriesSquareIds', $square_categories, 2400 );
+	}
 	$target_categories = array();
 	$excluded_products = array();
 
@@ -89,9 +102,9 @@ function woo_square_plugin_get_non_sync_woo_data() {
 
 		$target_categories[ $cat->term_id ]['name'] = $cat->name;
 	}
-		$square_categories = $square_to_woo_synchronizer->get_square_categories();
+	$square_categories = $square_to_woo_synchronizer->get_square_categories();
 
-		// check for new category that not exist in square.
+	// check for new category that not exist in square.
 	if ( ! empty( $target_categories ) ) {
 		foreach ( $target_categories as $cats ) {
 			if ( ! empty( $cats['square_id'] ) ) {
@@ -116,9 +129,32 @@ function woo_square_plugin_get_non_sync_woo_data() {
 		}
 	}
 
-	// 2-get un-syncronized products ( having is_square_sync = 0 or key not exists )
-	$products       = $synchronizer->get_unsynchronized_products();
-	$square_poducts = $synchronizer->get_products_square_ids( $products, $excluded_products );
+	// 2-get un-syncronized products ( having is_square_sync = 0 or key not exists ).
+	$products = get_transient( 'getUnsynchronizedProducts' );
+
+	if ( ! $products ) {
+
+		$products = $synchronizer->get_unsynchronized_products();
+		set_transient( 'allwooproducts', $products, 2400 );
+		set_transient( 'getUnsynchronizedProducts', $products, 2400 );
+
+	}
+
+	$square_poducts = get_transient( 'getProductsSquareIds' );
+
+	if ( ! $square_poducts ) {
+
+		$square_poducts = $synchronizer->get_products_square_ids( $products, $excluded_products );
+
+		set_transient( 'getProductsSquareIds', $square_poducts, 2400 );
+	}
+
+	$square_items = get_transient( 'square_items_cache' );
+
+	if ( ! $square_items ) {
+		$square_items = $square_to_woo_synchronizer->get_square_items();
+		set_transient( 'square_items_cache', $square_items, 2400 ); // Cache for 2400 seconds.
+	}
 
 	$target_products = array();
 
@@ -129,11 +165,11 @@ function woo_square_plugin_get_non_sync_woo_data() {
 	if ( empty( $_GET['page'] ) ) {
 		$_SESSION = array();
 	}
-	if ( $total > 999 ) {
 
+	if ( $total > 199 ) {
 		$page        = ! empty( $_GET['page'] ) ? (int) $_GET['page'] : 1;
 		$total       = count( $products ); // total items in array.
-		$limit       = 999; // per page.
+		$limit       = 199; // per page.
 		$total_pages = ceil( $total / $limit ); // calculate total pages.
 		$page        = max( $page, 1 ); // get 1 page when $_GET['page'] <= 0.
 		$page        = min( $page, $total_pages ); // get last page when $_GET['page'] > $total_pages.
@@ -142,7 +178,8 @@ function woo_square_plugin_get_non_sync_woo_data() {
 			$offset = 0;
 		}
 
-		$products = array_slice( $products, $offset, $limit );
+		$products   = array_slice( $products, $offset, $limit );
+		$countcount = count( $products ) + $offset;
 	}
 
 	// merge add and update items.
@@ -152,8 +189,8 @@ function woo_square_plugin_get_non_sync_woo_data() {
 
 		$product_id = $product->ID; // the ID of the product to check.
 		$_product   = wc_get_product( $product_id );
-		
-        if( WC_Product_Factory::get_product_type($product_id) == 'simple' ) {
+
+		if ( WC_Product_Factory::get_product_type( $product_id ) === 'simple' ) {
 			// do stuff for simple products.
 			$sku = get_post_meta( $product->ID, '_sku', true );
 			if ( empty( $sku ) ) {
@@ -165,7 +202,7 @@ function woo_square_plugin_get_non_sync_woo_data() {
 				);
 
 			}
-        } else if(  WC_Product_Factory::get_product_type($product_id) == 'variable'  ) {
+		} elseif ( WC_Product_Factory::get_product_type( $product_id ) === 'variable' ) {
 			$tickets   = new WC_Product_Variable( $product_id );
 			$variables = $tickets->get_available_variations();
 
@@ -210,11 +247,11 @@ function woo_square_plugin_get_non_sync_woo_data() {
 						$get_var = 'get_var';
 						$rcount  = $wpdb->$get_var( 'SELECT modifier_set_unique_id FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_id = '$mod[2]' " );
 
-						$get_result   = 'get_results';
-						$raw_modifier = $wpdb->$get_result( "SELECT * FROM {$wpdb->prefix}woosquare_modifier WHERE modifier_id = '$mod[2]';" );
+						$get_results  = 'get_results';
+						$raw_modifier = $wpdb->$get_results( "SELECT * FROM {$wpdb->prefix}woosquare_modifier WHERE modifier_id = '$mod[2]';" );
 
 						foreach ( $raw_modifier as $raw ) {
-							$mod_ids = '';
+								$mod_ids = '';
 							if ( ! empty( $raw->modifier_set_unique_id ) ) {
 								$mod_ids = $raw->modifier_set_unique_id;
 							} else {
@@ -256,85 +293,173 @@ function woo_square_plugin_get_non_sync_woo_data() {
 		}
 
 		$target_products[ $product->ID ]['name'] = $product->post_title;
-
-	}
-
-	// 3-get deleted elements failed to be synchronized.
-	$deleted_elms = $synchronizer->get_unsynchronized_deleted_elements();
-
-	// merge deleted items and categories with their corresponding arrays.
-	foreach ( $deleted_elms as $elm ) {
-
-		if ( Helpers::TARGET_TYPE_PRODUCT === $elm->target_type ) {   // PRODUCT.
-			$target_products[ $elm->target_id ]['square_id'] = $elm->square_id;
-			$target_products[ $elm->target_id ]['action']    = 'delete';
-			$target_products[ $elm->target_id ]['name']      = $elm->name;
-
-			// for display.
-			$delete_products[] = array(
-				'woo_id'       => null,
-				'checkbox_val' => $elm->target_id,
-				'name'         => $elm->name,
-			);
-		} else {                                                                  // CATEGORY.
-			$target_categories[ $elm->target_id ]['square_id'] = $elm->square_id;
-			$target_categories[ $elm->target_id ]['action']    = 'delete';
-			$target_categories[ $elm->target_id ]['name']      = $elm->name;
-			$delete_categories[]                               = array(
-				'woo_id'       => null,
-				'checkbox_val' => $elm->target_id,
-				'name'         => $elm->name,
-			);
-		}
 	}
 
 	// 4-get all square items simplified.
-
-	$square_to_woo_synchronizer = new SquareToWooSynchronizer( $square );
-	$square_items               = $square_to_woo_synchronizer->get_square_items();
-
 	$square_items_modified = array();
 	if ( $square_items ) {
 		$square_items_modified = $synchronizer->simplify_square_items_object( $square_items );
 	}
+	set_transient( 'square_itemsss', $square_items_modified, 4800 );
 
-	// construct session array.
-	if ( ! isset( $_SESSION['woo_to_square']['target_products'] ) ) {
-		$_SESSION['woo_to_square']['target_products'] = array();
-	}
-
-	if ( isset( $_SESSION['woo_to_square']['target_products'] ) ) {
-
-		if ( ! empty( $_SESSION['woo_to_square']['target_products'] ) ) {
-			$session_target_products = array_map( 'sanitize_text_field', $_SESSION['woo_to_square']['target_products'] );
-
-			foreach ( $session_target_products as $kys => $ses ) {
-				$target_products[ $kys ] = $session_target_products;
-			}
-		}
-
-		$_SESSION['woo_to_square']['target_products'] = $target_products;
-	}
-
-	$_SESSION['woo_to_square']['target_categories'] = $target_categories;
-	// add simplified object to session.
-	set_transient( 'woo_to_square-square_items', $square_items_modified, 2000 );
+	$woo_to_square_target_categories['woo_to_square']['target_categories'] = $target_categories;
+	set_transient( 'woo_to_square_target_categories', $woo_to_square_target_categories, 1000 );
+	$_SESSION['woo_to_square']['suqare_items'] = $square_items_modified;
 
 	ob_start();
 	include plugin_dir_path( __DIR__ ) . '../views/partials/pop-up.php';
 	$data = ob_get_clean();
+
 	if ( empty( $offset ) ) {
 		$offset = 0;
 	}
+
 	echo wp_json_encode(
 		array(
-			'data'           => $data,
-			'offset'         => $offset,
-			'totalPages'     => $total_pages,
-			'targetProducts' => ! empty( $_SESSION['woo_to_square']['target_products'] ) ? count( $_SESSION['woo_to_square']['target_products'] ) : '',
-			'limit'          => $limit,
+			'data'       => $data,
+			'offset'     => $offset,
+			'totalPages' => $total_pages,
+			'totalitems' => $total,
+			'count'      => isset( $countcount ) ? $countcount : 0,
+			'limit'      => $limit,
 		)
 	);
+	die();
+}
+
+/**
+ * Handles AJAX request to save WooSquare lists.
+ *
+ * This function verifies the AJAX nonce, sanitizes input, deletes existing options,
+ * updates options with provided product and category lists, and returns a success response.
+ *
+ * @return void
+ */
+function woo_square_listsaved() {
+	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
+		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+	}
+
+	$saveto = isset( $_REQUEST['saveto'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['saveto'] ) ) : '';
+	delete_option( 'woo_square_listsaved_products_' . $saveto );
+	delete_option( 'woo_square_listsaved_categories_' . $saveto );
+
+	// Handle products.
+	if ( ! empty( $_REQUEST['products'] ) ) {
+		$products_raw = sanitize_text_field( wp_unslash( $_REQUEST['products'] ) ); // Remove slashes.
+
+		// If products is expected to be an array (like an array of product IDs), sanitize each element.
+		if ( is_array( $products_raw ) ) {
+			$products = array_map( 'sanitize_text_field', $products_raw );
+		} else {
+			// If it's a single value, sanitize it directly.
+			$products = sanitize_text_field( $products_raw );
+		}
+
+		// Ensure it's an array.
+		if ( is_string( $products_raw ) ) {
+			$products_raw = json_decode( $products_raw, true );
+		}
+
+		if ( ! is_array( $products_raw ) ) {
+			$products_raw = explode( ',', $products_raw );
+		}
+
+		update_option( 'woo_square_listsaved_products_' . $saveto, $products_raw );
+	}
+
+	// Handle categories.
+	if ( ! empty( $_REQUEST['categories'] ) ) {
+		// Sanitize the categories input immediately.
+		$categories_raw = sanitize_text_field( wp_unslash( $_REQUEST['categories'] ) ); // Remove slashes.
+
+		// If categories are expected to be an array of values, sanitize each item.
+		if ( is_array( $categories_raw ) ) {
+			$categories_raw = array_map( 'sanitize_text_field', $categories_raw );
+		} else {
+			// If it's a single value, sanitize it directly.
+			$categories_raw = sanitize_text_field( $categories_raw );
+		}
+
+		// Ensure it's an array.
+		if ( is_string( $categories_raw ) ) {
+			$categories_raw = json_decode( $categories_raw, true );
+		}
+
+		if ( ! is_array( $categories_raw ) ) {
+			$categories_raw = explode( ',', $categories_raw );
+		}
+
+		// Update the option.
+		update_option( 'woo_square_listsaved_categories_' . $saveto, $categories_raw );
+	}
+
+	echo '1';
+	die();
+}
+
+
+/**
+ * Handles AJAX request to get products by selected categories.
+ *
+ * This function verifies the AJAX nonce, checks the caller type (WooCommerce or Square),
+ * retrieves products based on selected categories, and returns the product IDs.
+ * It also sets a transient with the selected categories.
+ *
+ * @return void
+ */
+function woo_square_get_data_by_category() {
+	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
+		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+	}
+	if ( isset( $_POST['selected_categories'] ) ) {
+		$selected_categories = array_map( 'sanitize_text_field', wp_unslash( $_POST['selected_categories'] ) );
+		if ( isset( $_POST['caller'] ) && ( 'woo' === $_POST['caller'] || 'listsaved_woo' === $_POST['caller'] ) ) {
+			$woo_to_square_target_products = get_transient( 'allwooproducts' );
+
+			if ( isset( $woo_to_square_target_products ) ) {
+				foreach ( $woo_to_square_target_products as $key => $target_product ) {
+					$product = wc_get_product( $target_product->ID );
+					$terms   = get_the_terms( $target_product->ID, 'product_cat' );
+
+					if ( is_array( $terms ) ) {
+						foreach ( $terms as $term ) {
+							$product_with_category[ $target_product->ID ][] = $term->term_id;
+						}
+					}
+				}
+				foreach ( $selected_categories as $selected_category ) {
+					$selected_category = (int) $selected_category;
+					foreach ( $product_with_category as $pro_id => $pro ) {
+						if ( in_array( $selected_category, $pro, true ) ) {
+									$pro_cat[] = $pro_id;
+						}
+					}
+				}
+			}
+		} elseif ( isset( $_POST['caller'] ) && ( 'square' === $_POST['caller'] || 'listsaved_square' === $_POST['caller'] ) ) {
+			$square_to_woo = get_transient( 'square_to_woo' );
+			if ( isset( $square_to_woo['square_to_woo']['target_products'] ) ) {
+				foreach ( $square_to_woo['square_to_woo']['target_products'] as $key => $target_product ) {
+					if ( isset( $target_product->category ) ) {
+						$product_with_category[ $key ][] = $target_product->category->id;
+					}
+				}
+				foreach ( $selected_categories as $selected_category ) {
+					$selected_category = $selected_category;
+					foreach ( $product_with_category as $pro_id => $pro ) {
+						if ( in_array( $selected_category, $pro, true ) ) {
+							$pro_cat[] = $pro_id;
+						}
+					}
+				}
+			}
+		}
+		set_transient( 'selected_sync_categories', $selected_categories, 1200 );
+	}
+	if ( isset( $pro_cat ) ) {
+		echo wp_json_encode( $pro_cat );
+	}
 	die();
 }
 
@@ -349,11 +474,14 @@ function woo_square_plugin_start_manual_woo_to_square_sync() {
 
 	$check_flag = check_sync_start_conditions();
 	if ( true !== $check_flag ) {
-		die( esc_html( $check_flag ) ); }
-
+		die( esc_html( $check_flag ) );
+	}
+	$woo_to_square_target_categories = get_transient( 'woo_to_square_target_categories' );
 	update_option( 'woo_square_running_sync', 'manual' );
 	update_option( 'woo_square_running_sync_time', time() );
-
+	if ( session_status() === PHP_SESSION_NONE ) {
+		session_start();
+	}
 	unset( $_SESSION['woo_product_sync_log'] );
 	unset( $_SESSION['woo_product_sync_log_id'] );
 	unset( $_SESSION['woo_product_delete_log'] );
@@ -364,17 +492,10 @@ function woo_square_plugin_start_manual_woo_to_square_sync() {
 	delete_transient( 'woo_product_sync_log_id_transient' );
 	delete_transient( 'woo_product_delete_log_transient' );
 	delete_transient( 'woo_delete_product_log_id_transient' );
-	session_start();
 
-	$_SESSION['woo_to_square']['target_products']['parent_id'] = Helpers::sync_db_log(
-		Helpers::ACTION_SYNC_START,
-		gmdate( 'Y-m-d H:i:s' ),
-		Helpers::SYNC_TYPE_MANUAL,
-		Helpers::SYNC_DIRECTION_WOO_TO_SQUARE
-	);
-	if ( isset( $_SESSION['woo_to_square']['target_products']['parent_id'] ) ) {
-		$_SESSION['woo_to_square']['target_categories']['parent_id'] = sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products']['parent_id'] ) );
-	}
+	$woo_to_square_target_categories['woo_to_square']['target_products']['parent_id'] =
+		isset( $woo_to_square_target_categories['woo_to_square']['target_categories']['parent_id'] ) ? $woo_to_square_target_categories['woo_to_square']['target_categories']['parent_id'] : '';
+
 	echo '1';
 	die();
 }
@@ -390,6 +511,12 @@ function woo_square_plugin_sync_woo_category_to_square() {
 	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 	}
+	session_start();
+	$woo_to_square_target_categories = get_transient( 'woo_to_square_target_categories' );
+	if ( ! empty( $_POST['id'] ) ) {
+		$cat_id = sanitize_text_field( wp_unslash( $_POST['id'] ) );
+	}
+
 	$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
 	if ( empty( $woo_product_sync_log_transientt ) ) {
 		$arr = array();
@@ -398,12 +525,7 @@ function woo_square_plugin_sync_woo_category_to_square() {
 
 	$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
 
-	session_start();
-	if ( ! empty( $_POST['id'] ) ) {
-		$cat_id = sanitize_text_field( wp_unslash( $_POST['id'] ) );
-	}
-	$session_action = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['action'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['action'] ) ) : '';
-	$action_type    = $session_action;
+	$action_type = $woo_to_square_target_categories['woo_to_square']['target_categories'][ $cat_id ]['action'];
 
 	$square              = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 	$square_synchronizer = new WooToSquareSynchronizer( $square );
@@ -413,13 +535,11 @@ function woo_square_plugin_sync_woo_category_to_square() {
 		case 'add':
 			$category = get_term_by( 'id', $cat_id, 'product_cat' );
 			$result   = $square_synchronizer->add_category( $category );
-			
-			$woo_product_sync_log_transient[ $cat_id ][ $result['pro_status'] ] = $result;
-			$woo_product_sync_log_transient                                     = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
-			set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
-			$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+			if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+				$woo_product_sync_log_transient[ $cat_id ][ $result['pro_status'] ] = $result;
+				$woo_product_sync_log_transient                                     = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
+				set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
+				$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
 				$woosquare_sync_log                = new WooSquare_Sync_Logs();
 				$log_id                            = $woosquare_sync_log->log_data_request( $woo_product_sync_log_transient, $woo_product_sync_log_id_transient, 'woo_to_square', 'category' );
 				if ( ! empty( $log_id ) ) {
@@ -429,6 +549,7 @@ function woo_square_plugin_sync_woo_category_to_square() {
 			if ( true === $result['status'] ) {
 				update_option( "is_square_sync_{$cat_id}", 1 );
 			}
+
 			$action = Helpers::ACTION_ADD;
 			break;
 
@@ -436,19 +557,12 @@ function woo_square_plugin_sync_woo_category_to_square() {
 			$category = get_term_by( 'id', $cat_id, 'product_cat' );
 
 			$category->term_id = $cat_id;
-
-			$session_square_id = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ) : '';
-
-			$result = $square_synchronizer->edit_category( $category, $session_square_id );
-
-			$woo_product_sync_log_transient[ $cat_id ][ $result['pro_status'] ] = $result;
-			
-			$woo_product_sync_log_transient                                     = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
-			
-			set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
-			$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+			$result            = $square_synchronizer->edit_category( $category, $woo_to_square_target_categories['woo_to_square']['target_categories'][ $cat_id ]['square_id'] );
+			if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+				$woo_product_sync_log_transient[ $cat_id ][ $result['pro_status'] ] = $result;
+				$woo_product_sync_log_transient                                     = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
+				set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
+				$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
 				$woosquare_sync_log                = new WooSquare_Sync_Logs();
 				$log_id                            = $woosquare_sync_log->log_data_request( $woo_product_sync_log_transient, $woo_product_sync_log_id_transient, 'woo_to_square', 'category' );
 				if ( ! empty( $log_id ) ) {
@@ -462,8 +576,8 @@ function woo_square_plugin_sync_woo_category_to_square() {
 			break;
 
 		case 'delete':
-			$item_square_id                    = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ?
-			sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ) : null;
+			$item_square_id                    = isset( $woo_to_square_target_categories['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ?
+			$woo_to_square_target_categories['woo_to_square']['target_categories'][ $cat_id ]['square_id'] : null;
 			$woo_product_delete_log_transientt = get_transient( 'woo_product_delete_log_transient' );
 			if ( empty( $woo_product_delete_log_transientt ) ) {
 				$arr = array();
@@ -471,42 +585,35 @@ function woo_square_plugin_sync_woo_category_to_square() {
 			}
 
 			$woo_product_delete_log_transientt = get_transient( 'woo_product_delete_log_transient' );
-			$category                          = get_term_by( 'id', $cat_id, 'product_cat' );
 			if ( $item_square_id ) {
 				$result = $square_synchronizer->delete_category( $item_square_id );
 
 				// delete category from plugin delete table.
 				if ( true === $result || ( 'NOT_FOUND' === $result['errors'][0]['code'] ) ) {
 					global $wpdb;
-					$session_category_name                                 = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ) : '';
-					$delt_pro_array                                        = array(
+					$session_category_name = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ) : '';
+					$delt_pro_array        = array(
 						'name'    => $session_category_name,
 						'status'  => 'deleted',
 						'item'    => 'category',
 						'message' => __( 'Successfully Deleted', 'woosquare' ),
 					);
-					$woo_product_delete_log_transient[ $cat_id ]['delete'] = $delt_pro_array;
-					$woo_product_delete_log_transient                      = array_merge( $woo_product_delete_log_transientt, $woo_product_delete_log_transient );
-					set_transient( 'woo_product_delete_log_transient', $woo_product_delete_log_transient, 300 );
-					$woo_delete_product_log_id_transient = get_transient( 'woo_delete_product_log_id_transient' );
-					$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-					if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+					if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+						$woo_product_delete_log_transient[ $cat_id ]['delete'] = $delt_pro_array;
+						$woo_product_delete_log_transient                      = array_merge( $woo_product_delete_log_transientt, $woo_product_delete_log_transient );
+						set_transient( 'woo_product_delete_log_transient', $woo_product_delete_log_transient, 300 );
+						$woo_delete_product_log_id_transient = get_transient( 'woo_delete_product_log_id_transient' );
+
 						$woosquare_sync_log = new WooSquare_Sync_Logs();
 
 						$log_id = $woosquare_sync_log->delete_product_log_data_request( $woo_product_delete_log_transient, $woo_delete_product_log_id_transient, 'category', 'woo_to_square' );
 						if ( ! empty( $log_id ) ) {
-							set_transient( 'woo_delete_product_log_id_transient', $log_id, 300 );
+								set_transient( 'woo_delete_product_log_id_transient', $log_id, 300 );
 						}
 					}
-					$delete = 'delete';
-					$result = $wpdb->$delete(
-						$wpdb->prefix . WOO_SQUARE_TABLE_DELETED_DATA,
-						array( 'square_id' => $item_square_id )
-					);
 
-					if ( 1 === $result ) {
-						$result['status'] = true;
-					}
+					$result = true;
+
 				}
 			}
 
@@ -518,26 +625,11 @@ function woo_square_plugin_sync_woo_category_to_square() {
 	// check if response returned is bool or error response message.
 	$message = null;
 	if ( ! is_bool( $result['status'] ) ) {
-		$message          = $result['message'];
-		$result['status'] = false;
+		$message = $result['message'];
+		$result  = false;
 
 	}
-	$session_category_name = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['name'] ) ) : '';
-	$session_square_id     = isset( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories'][ $cat_id ]['square_id'] ) ) : '';
-	$session_parent_id     = isset( $_SESSION['woo_to_square']['target_categories']['parent_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_categories']['parent_id'] ) ) : '';
-	Helpers::sync_db_log(
-		$action,
-		gmdate( 'Y-m-d H:i:s' ),
-		Helpers::SYNC_TYPE_MANUAL,
-		Helpers::SYNC_DIRECTION_WOO_TO_SQUARE,
-		$cat_id,
-		Helpers::TARGET_TYPE_CATEGORY,
-		$result ? Helpers::TARGET_STATUS_SUCCESS : Helpers::TARGET_STATUS_FAILURE,
-		$session_parent_id,
-		$session_category_name,
-		$session_square_id,
-		$message
-	);
+
 	echo esc_html( $result['status'] );
 	die();
 }
@@ -550,7 +642,6 @@ function woo_square_plugin_sync_woo_category_to_square() {
  * @return void Outputs the result of the synchronization process.
  */
 function woo_square_plugin_sync_woo_product_to_square() {
-
 	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 	}
@@ -562,7 +653,6 @@ function woo_square_plugin_sync_woo_product_to_square() {
 	$square_synchronizer = new WooToSquareSynchronizer( $square );
 
 	if ( ! strcmp( $product_id, 'modifier_set_end' ) ) {
-
 		unset( $_SESSION['modifier_name_array'] );
 		unset( $_SESSION['session_key_count'] );
 		unset( $_SESSION['product_loop_id'] );
@@ -579,34 +669,23 @@ function woo_square_plugin_sync_woo_product_to_square() {
 			$result = $square_synchronizer->woo_square_plugin_sync_woo_modifier_to_square_modifier( $product_id );
 		} else {
 
-			if ( ! isset( $_SESSION['woo_to_square']['target_products'][ $product_id ] ) ) {
+			$woo_to_square_target_products = get_transient( 'woo_to_square_target_products' );
+			if ( ! isset( $woo_to_square_target_products['woo_to_square']['target_products'][ $product_id ] ) ) {
 				$result = false;
 			}
-			$session_action = isset( $_SESSION['woo_to_square']['target_products'][ $product_id ]['action'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products'][ $product_id ]['action'] ) ) : '';
-			$action_type    = $session_action;
+			$action_type = isset( $woo_to_square_target_products['woo_to_square']['target_products'][ $product_id ]['action'] ) ? $woo_to_square_target_products['woo_to_square']['target_products'][ $product_id ]['action'] : '';
 
 			$result = false;
+
 			if ( ! strcmp( $action_type, 'delete' ) ) {
 
 				// delete.
-				$item_square_id = isset( $_SESSION['woo_to_square']['target_products'][ $product_id ]['square_id'] ) ?
-				sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products'][ $product_id ]['square_id'] ) ) : null;
+				$item_square_id = isset( $woo_to_square_target_products['woo_to_square']['target_products'][ $product_id ]['square_id'] ) ?
+				$woo_to_square_target_products['woo_to_square']['target_products'][ $product_id ]['square_id'] : null;
 
 				if ( $item_square_id ) {
-					if ( get_option( 'disable_auto_delete' ) !== 1 ) {
+					if ( ! get_option( 'disable_auto_delete' ) ) {
 						$result = $square_synchronizer->delete_product_or_get( $item_square_id, 'DELETE' );
-					}
-					// delete product from plugin delete table.
-					if ( true === $result['status'] || 'NOT_FOUND' === $result['errors'][0]['code'] ) {
-						global $wpdb;
-						$delete = 'delete';
-						$wpdb->$delete(
-							$wpdb->prefix . WOO_SQUARE_TABLE_DELETED_DATA,
-							array( 'square_id' => $item_square_id )
-						);
-
-						$_SESSION['product_sync_log'][ $product_id ] = $result;
-						$result                                      = true;
 					}
 				}
 				$_SESSION['productid']       = $product_id;
@@ -614,6 +693,7 @@ function woo_square_plugin_sync_woo_product_to_square() {
 				$action                      = Helpers::ACTION_DELETE;
 
 			} else {   // add/update.
+
 				$post = get_post( $product_id );
 
 				$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
@@ -623,15 +703,14 @@ function woo_square_plugin_sync_woo_product_to_square() {
 				}
 
 				$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
-
 				if ( ! strpos( $product_id, 'modifier' ) && ! strpos( $product_id, 'add_modifier' ) ) {
-					$product_square_id = $square_synchronizer->check_sku_in_square( $post, get_transient( 'woo_to_square-square_items' ) );
+					$product_square_id = $square_synchronizer->check_sku_in_square( $post, get_transient( 'square_itemsss' ) );
 
 					if ( ! $product_square_id ) {
 						// not exist in square so check in woo this product already updated.
 						$product_square_id = get_post_meta( $post->ID, 'square_id', true );
 						if ( $product_square_id ) {
-							$exploded_product_square_id = explode( '-', $product_square_id );
+								$exploded_product_square_id = explode( '-', $product_square_id );
 							if ( count( $exploded_product_square_id ) === 5 ) {
 
 								$product = wc_get_product( $post->ID );
@@ -657,12 +736,12 @@ function woo_square_plugin_sync_woo_product_to_square() {
 									'query'        =>
 									array(
 										'text_query' =>
-										array(
-											'keywords' =>
 											array(
-												0 => $product->get_sku(),
+												'keywords' =>
+													array(
+														0 => $product->get_sku(),
+													),
 											),
-										),
 									),
 								);
 								$response = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
@@ -683,13 +762,13 @@ function woo_square_plugin_sync_woo_product_to_square() {
 							}
 						}
 					}
+
 					$result = $square_synchronizer->add_product( $post, $product_square_id );
-					$woo_product_sync_log_transient[ $product_id ][ $result['pro_status'] ] = $result;
-					$woo_product_sync_log_transient = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
-					set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
-					$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
-					$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-					if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+					if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+						$woo_product_sync_log_transient[ $product_id ][ $result['pro_status'] ] = $result;
+						$woo_product_sync_log_transient = array_merge( $woo_product_sync_log_transientt, $woo_product_sync_log_transient );
+						set_transient( 'woo_product_sync_log_transient', $woo_product_sync_log_transient, 300 );
+						$woo_product_sync_log_id_transient = get_transient( 'woo_product_sync_log_id_transient' );
 						$woosquare_sync_log                = new WooSquare_Sync_Logs();
 						$log_id                            = $woosquare_sync_log->log_data_request( $woo_product_sync_log_transient, $woo_product_sync_log_id_transient, 'woo_to_square', 'product' );
 						if ( ! empty( $log_id ) ) {
@@ -701,7 +780,7 @@ function woo_square_plugin_sync_woo_product_to_square() {
 						update_post_meta( $product_id, 'is_square_sync', 1 );
 					}
 					$action = ( ! strcmp( $action_type, 'update' ) ) ? Helpers::ACTION_UPDATE :
-						Helpers::ACTION_ADD;
+					Helpers::ACTION_ADD;
 
 					$_SESSION['productid']       = $product_id;
 					$_SESSION['product_loop_id'] = $product_id;
@@ -716,24 +795,27 @@ function woo_square_plugin_sync_woo_product_to_square() {
 			$message = $result['message'];
 			$result  = false;
 		}
-		$session_product_name = isset( $_SESSION['woo_to_square']['target_products'][ $product_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products'][ $product_id ]['name'] ) ) : '';
-		$session_parent_id    = isset( $_SESSION['woo_to_square']['target_products']['parent_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products']['parent_id'] ) ) : '';
-		Helpers::sync_db_log(
-			$action,
-			gmdate( 'Y-m-d H:i:s' ),
-			Helpers::SYNC_TYPE_MANUAL,
-			Helpers::SYNC_DIRECTION_WOO_TO_SQUARE,
-			$product_id,
-			Helpers::TARGET_TYPE_PRODUCT,
-			$result ? Helpers::TARGET_STATUS_SUCCESS : Helpers::TARGET_STATUS_FAILURE,
-			$session_parent_id,
-			$session_product_name,
-			$product_square_id,
-			$message
-		);
-
 	}
+
 	echo esc_html( $result['status'] );
+	die();
+}
+
+/**
+ * Deletes specific WooCommerce synchronization transients.
+ *
+ * This function removes the transients 'getProductsSquareIds' and
+ * 'getUnsynchronizedProducts' used for manual WooCommerce synchronization.
+ * It then outputs '1' and terminates script execution.
+ *
+ * @return void
+ */
+function delete_manual_woo_sync_transients() {
+	delete_transient( 'getProductsSquareIds' );
+	delete_transient( 'getUnsynchronizedProducts' );
+	delete_transient( 'square_itemsss' );
+	delete_transient( 'square_items_cache' );
+	echo '1';
 	die();
 }
 
@@ -753,12 +835,16 @@ function woo_square_plugin_terminate_manual_woo_sync() {
 		update_option( 'woo_square_running_sync_time', 0 );
 	}
 
-	session_start();
+	delete_transient( 'getUnsynchronizedProducts' );
+	delete_transient( 'getProductsSquareIds' );
+	delete_transient( 'getUnsynchronizedCategories' );
+	delete_transient( 'getCategoriesSquareIds' );
+	$woo_to_square_target_products = get_transient( 'woo_to_square_target_products' );
 	// ensure function is not called twice.
-	if ( ! isset( $_SESSION['woo_to_square'] ) ) {
+	if ( ! isset( $woo_to_square_target_products['woo_to_square'] ) ) {
 		return;
 	}
-	unset( $_SESSION['woo_to_square'] );
+	delete_transient( 'woo_to_square_target_products' );
 
 	echo '1';
 	die();
@@ -771,9 +857,11 @@ function woo_square_plugin_terminate_manual_woo_sync() {
  */
 function woo_square_plugin_get_non_sync_square_data() {
 
+	delete_transient( 'selected_sync_categories' );
 	$check_flag = check_sync_start_conditions();
 	if ( true !== $check_flag ) {
-		die( wp_json_encode( array( 'error' => $check_flag ) ) ); }
+		die( wp_json_encode( array( 'error' => $check_flag ) ) );
+	}
 
 	$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 
@@ -789,67 +877,24 @@ function woo_square_plugin_get_non_sync_square_data() {
 	// display only one checkbox in update.
 	$one_products_update_checkbox = true;
 
-	// 1-get all square categories ( having is_square_sync = 0 or key not exists )
+	// 1-get all square categories ( having is_square_sync = 0 or key not exists ).
 	$square_categories = $synchronizer->get_square_categories();
 
 	$synch_square_ids = array();
-	if ( ! empty( $square_categories ) ) {
+
+	if ( ! empty( (array) $square_categories ) ) {
 		// get previously linked categories to woo.
 		$woo_square_cats = $synchronizer->get_unsync_woo_square_categories_ids( $square_categories, $synch_square_ids );
+
 	} else {
 		$square_categories = array();
 		$woo_square_cats   = array();
 	}
 
 	$target_categories = array();
-
 	// merge add and update categories.
-	$taxonomy       = 'product_cat';
-	$orderby        = 'name';
-	$show_count     = 0;   // 1 for yes, 0 for no.
-	$pad_counts     = 0;   // 1 for yes, 0 for no.
-	$hierarchical   = 1;   // 1 for yes, 0 for no.
-	$title          = '';
-	$empty          = 0;
-	$args           = array(
-		'taxonomy'     => $taxonomy,
-		'orderby'      => $orderby,
-		'show_count'   => $show_count,
-		'pad_counts'   => $pad_counts,
-		'hierarchical' => $hierarchical,
-		'title_li'     => $title,
-		'hide_empty'   => $empty,
-	);
-	$all_categories = get_categories( $args );
-	
-	foreach ( $all_categories as $keyscategories => $catsterms ) {
-        
-		$term_id = get_option( 'category_square_id_' . $catsterms->term_id );
-        
-		if ( empty( $term_id ) ) {
-			$target_categories[ $catsterms->term_id ]['action']  = 'delete';
-			$target_categories[ $catsterms->term_id ]['woo_id']  = $catsterms->term_id;
-			$target_categories[ $catsterms->term_id ]['name']    = $catsterms->name;
-			$target_categories[ $catsterms->term_id ]['version'] = null;
-            
-			// for display.
-			if($catsterms->name != 'Uncategorized'){
-			    $delete_categories[] = array(
-    				'woo_id'       => $catsterms->term_id,
-    				'checkbox_val' => $catsterms->term_id,
-    				'name'         => $catsterms->name,
-    			);
-			}
-			
-		}else{
-		    $squaretermexist[$term_id] = $catsterms->term_id;
-		}
-	}
-
 	foreach ( $square_categories as $cat ) {
-       
-        
-		if ( ! isset( $squaretermexist[ $cat->id ] ) ) {      // add.
+		if ( ! isset( $woo_square_cats[ $cat->id ] ) ) {      // add.
 			$target_categories[ $cat->id ]['action']  = 'add';
 			$target_categories[ $cat->id ]['woo_id']  = null;
 			$target_categories[ $cat->id ]['name']    = $cat->category_data->name;
@@ -863,9 +908,7 @@ function woo_square_plugin_get_non_sync_square_data() {
 			);
 
 		} else {                                       // update.
-			// if category has square id but already synchronized, no need to synch again.
-           
-			
+
 			$target_categories[ $cat->id ]['action']   = 'update';
 			$target_categories[ $cat->id ]['woo_id']   = $woo_square_cats[ $cat->id ][0];
 			$target_categories[ $cat->id ]['name']     = $woo_square_cats[ $cat->id ][1];
@@ -874,19 +917,18 @@ function woo_square_plugin_get_non_sync_square_data() {
 
 			// for display.
 
-				if ( isset( $squaretermexist[ $cat->id ] ) ) {
+			if ( is_array( $woo_square_cats[ $cat->id ] ) ) {
 				$update_categories[] = array(
-					'woo_id'       => $squaretermexist[ $cat->id ],
+					'woo_id'       => $woo_square_cats[ $cat->id ][0],
 					'checkbox_val' => $cat->id,
-					'arrayyy'      => $woo_square_cats[ $cat->id ],
-					'name'         => get_term($squaretermexist[ $cat->id ])->name,
+					'array'        => $woo_square_cats[ $cat->id ],
+					'name'         => $woo_square_cats[ $cat->id ][1],
 				);
-			
 			}
 		}
 	}
 
-	// 2-get square products.
+	// 2-get square products
 
 	$target_products  = array();
 	$session_products = array();
@@ -898,6 +940,7 @@ function woo_square_plugin_get_non_sync_square_data() {
 		// get new square products and an array of products skipped from add/update actions.
 		$new_square_products = $synchronizer->get_new_products( $square_items, $skipped_products );
 	}
+
 	if ( isset( $_REQUEST['optionsaved'] ) ) { // phpcs:ignore
 		$new_square_products = $square_items;
 	}
@@ -926,7 +969,8 @@ function woo_square_plugin_get_non_sync_square_data() {
 		}
 		unset( $new_square_products['sku_misin_squ_woo_pro_variable'] );
 	}
-	$variats_ids = isset( $new_square_products['variats_ids'] ) ? $new_square_products['variats_ids'] : null;
+
+	$variats_ids = $new_square_products['variats_ids'];
 	unset( $new_square_products['variats_ids'] );
 
 	foreach ( $new_square_products as $key => $product ) {
@@ -940,7 +984,6 @@ function woo_square_plugin_get_non_sync_square_data() {
 				$target_products[ $product->id ]['modifier_set_name'][ $key ] = $mod_val['mod_sets']['name'];
 
 			}
-			// }
 		}
 
 		// store whole returned response in session.
@@ -950,9 +993,9 @@ function woo_square_plugin_get_non_sync_square_data() {
 			$kkey              = 0;
 			$modifier_set_name = array();
 			foreach ( $product->modifier_list_info as  $mod_val ) {
-				$modifier_set_name[ $kkey ] = $mod_val['mod_sets']['name'] . '|' . $mod_val['modifier_list_id'] . '|' . $mod_val['version'];
+				$mod_name                   = str_replace( ' - ', ' ', $mod_val['mod_sets']['name'] );
+				$modifier_set_name[ $kkey ] = $mod_name . '|' . $mod_val['modifier_list_id'] . '|' . $mod_val['version'];
 				++$kkey;
-
 			}
 		}
 
@@ -966,6 +1009,7 @@ function woo_square_plugin_get_non_sync_square_data() {
 
 			);
 		} else {
+
 			$add_products[] = array(
 				'woo_id'       => null,
 				'name'         => $product->name,
@@ -979,25 +1023,25 @@ function woo_square_plugin_get_non_sync_square_data() {
 	if ( ! isset( $_SESSION ) ) {
 		session_start();
 	}
-	$_SESSION['square_to_woo']                                        = array();
-	$_SESSION['square_to_woo']['target_categories']                   = $target_categories;
-	$_SESSION['square_to_woo']['target_products']                     = $session_products;
-	$_SESSION['square_to_woo']['target_products']['skipped_products'] = $skipped_products;
+	$square_to_woo                                       = array();
+	$square_to_woo['square_to_woo']['target_categories'] = $target_categories;
+	$square_to_woo['square_to_woo']['target_products']   = $session_products;
+	$square_to_woo['square_to_woo']['target_products']['skipped_products'] = $skipped_products;
+	set_transient( 'square_to_woo', $square_to_woo, 1000 );
 
 	$square_inventory_array = array();
 	$square_inventory       = new stdClass();
 
 	$woo_square_location_id = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 	$newvariations          = array();
-
 	if ( is_array( $variats_ids ) ) {
 
-			$variant_ids_chunks = array_chunk( $variats_ids, 499 );
+			$variant_ids_chunks = array_chunk( $variats_ids, 899 );
 			$square_inventories = array();
 		foreach ( $variant_ids_chunks as $key => $value ) {
-				$square_inventories[ $key ] = $synchronizer->get_square_inventory( $value );
+			$square_inventories[ $key ] = $synchronizer->get_square_inventory( $value );
 
-			foreach ( $square_inventories[ $key ]->counts as $vari ) {
+			foreach ( $square_inventories[ $key ] as $vari ) {
 
 				if ( $vari->location_id === $woo_square_location_id ) {
 					$newvariations[] = $vari;
@@ -1005,13 +1049,15 @@ function woo_square_plugin_get_non_sync_square_data() {
 				}
 			}
 		}
-			set_transient( $woo_square_location_id . 'transient_' . __FUNCTION__, $newvariations, 300 );
+
+		set_transient( $woo_square_location_id . 'transient_' . __FUNCTION__, $newvariations, 300 );
 	}
 
 	$square_inventory->counts = $newvariations;
 
 	if ( ! empty( $square_inventory->counts ) ) {
 		$square_inventory_array = $synchronizer->convert_square_inventory_to_associative( $square_inventory->counts );
+
 	}
 
 	set_transient( 'square_inventory', $square_inventory_array, 2400 );
@@ -1019,7 +1065,6 @@ function woo_square_plugin_get_non_sync_square_data() {
 	ob_start();
 	include plugin_dir_path( __DIR__ ) . '../views/partials/pop-up.php';
 	$data = ob_get_clean();
-
 	echo wp_json_encode( array( 'data' => $data ) );
 
 	die();
@@ -1040,11 +1085,11 @@ function woo_square_plugin_start_manual_square_to_woo_sync() {
 		die( esc_html( $check_flag ) );
 	}
 
+	$square_to_woo = get_transient( 'square_to_woo' );
 	update_option( 'woo_square_running_sync', 'manual' );
 	update_option( 'woo_square_running_sync_time', time() );
 
 	session_start();
-
 	unset( $_SESSION['square_product_sync_log'] );
 	unset( $_SESSION['square_product_sync_add_log'] );
 	unset( $_SESSION['square_product_sync_update_log'] );
@@ -1061,14 +1106,9 @@ function woo_square_plugin_start_manual_square_to_woo_sync() {
 	delete_transient( 'square_product_sync_log_transient' );
 	delete_transient( 'square_product_sync_log_id_transient' );
 	delete_transient( 'woo_delete_product_log_id' );
-	$_SESSION['woo_to_square']['target_products']['parent_id']   = Helpers::sync_db_log(
-		Helpers::ACTION_SYNC_START,
-		gmdate( 'Y-m-d H:i:s' ),
-		Helpers::SYNC_TYPE_MANUAL,
-		Helpers::SYNC_DIRECTION_WOO_TO_SQUARE
-	);
-	$_SESSION['woo_to_square']['target_categories']['parent_id'] = isset( $_SESSION['woo_to_square']['target_products']['parent_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['woo_to_square']['target_products']['parent_id'] ) ) : '';
-
+	if ( ! empty( $square_to_woo['square_to_woo']['target_categories']['parent_id'] ) ) {
+		$square_to_woo['square_to_woo']['target_products']['parent_id'] = $square_to_woo['square_to_woo']['target_categories']['parent_id'];
+	}
 	echo '1';
 	die();
 }
@@ -1085,7 +1125,6 @@ function woo_square_plugin_sync_square_category_to_woo() {
 	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 	}
-
 	$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
 
 	if ( empty( $square_product_sync_log_transientt ) ) {
@@ -1094,16 +1133,17 @@ function woo_square_plugin_sync_square_category_to_woo() {
 	}
 
 	$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
-
 	session_start();
+
 	if ( ! empty( $_POST['id'] ) ) {
 		$cat_id = sanitize_text_field( wp_unslash( $_POST['id'] ) );
 	}
-	if ( ! isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ] ) ) {
+	$square_to_woo = get_transient( 'square_to_woo' );
+	if ( ! isset( $square_to_woo['square_to_woo']['target_categories'][ $cat_id ] ) ) {
 		die();
 	}
-	$session_action      = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['action'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['action'] ) ) : '';
-	$action_type         = $session_action;
+	$action_type = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['action'];
+
 	$square              = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 	$square_synchronizer = new SquareToWooSynchronizer( $square );
 	$result              = false;
@@ -1112,21 +1152,22 @@ function woo_square_plugin_sync_square_category_to_woo() {
 		case 'add':
 			$category          = new stdClass();
 			$category->id      = $cat_id;
-			$category->name    = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ) : '';
-			$category->version = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['version'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['version'] ) ) : '';
+			$category->name    = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['name'];
+			$category->version = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['version'];
 			$result            = $square_synchronizer->add_category_to_woo( $category );
+
 			if ( false !== $result['status'] ) {
 				$category_id = $result['id'];
 				update_option( "is_square_sync_{$category_id}", 1 );
 				$target_id = $result['id'];
 
 			}
-			$square_product_sync_log_transient[ $result['id'] ][ $result['pro_status'] ] = $result;
-			$square_product_sync_log_transient = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
-			set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
-			$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+
+			if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+				$square_product_sync_log_transient[ $result['id'] ][ $result['pro_status'] ] = $result;
+				$square_product_sync_log_transient = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
+				set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
+				$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
 				$woosquare_sync_log                   = new WooSquare_Sync_Logs();
 				$log_id                               = $woosquare_sync_log->log_data_request( $square_product_sync_log_transient, $square_product_sync_log_id_transient, 'square_to_woo', 'category' );
 				if ( ! empty( $log_id ) ) {
@@ -1139,29 +1180,28 @@ function woo_square_plugin_sync_square_category_to_woo() {
 		case 'update':
 			$category          = new stdClass();
 			$category->id      = $cat_id;
-			$category->name    = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['new_name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['new_name'] ) ) : '';
-			$category->version = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['version'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['version'] ) ) : '';
-			$category_woo_id   = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ) : '';
+			$category->name    = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['new_name'];
+			$category->version = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['version'];
 			$result            = $square_synchronizer->update_woo_category(
 				$category,
-				$category_woo_id
+				$square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['woo_id']
 			);
 			if ( false !== $result['status'] ) {
 				update_option( "is_square_sync_{$result['id']}", 1 );
 			}
-			$square_product_sync_log_transient[ $result['id'] ][ $result['pro_status'] ] = $result;
-			$square_product_sync_log_transient = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
-			set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
-			$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
-				$woosquare_sync_log                   = new WooSquare_Sync_Logs();
-				$log_id                               = $woosquare_sync_log->log_data_request( $square_product_sync_log_transient, $square_product_sync_log_id_transient, 'square_to_woo', 'category' );
+			if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+				$square_product_sync_log_transient[ $result['id'] ][ $result['pro_status'] ] = $result;
+				$square_product_sync_log_transient = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
+				set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
+				$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
+
+				$woosquare_sync_log = new WooSquare_Sync_Logs();
+				$log_id             = $woosquare_sync_log->log_data_request( $square_product_sync_log_transient, $square_product_sync_log_id_transient, 'square_to_woo', 'category' );
 				if ( ! empty( $log_id ) ) {
-					set_transient( 'square_product_sync_log_id_transient', $log_id, 300 );
+						set_transient( 'square_product_sync_log_id_transient', $log_id, 300 );
 				}
 			}
-			$target_id = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ) : '';
+			$target_id = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['woo_id'];
 			$action    = Helpers::ACTION_UPDATE;
 			break;
 		case 'delete':
@@ -1173,12 +1213,10 @@ function woo_square_plugin_sync_square_category_to_woo() {
 
 			$woo_product_delete_log_transientt = get_transient( 'woo_product_delete_log_transient' );
 			$category                          = new stdClass();
-			$category->id                      = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ) : '';
-			$category->name                    = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ) : '';
-			
-			if ( get_option( 'disable_auto_delete' ) !== 1 ) {
-			    $result = $square_synchronizer->delete_woo_category( $category );
-			}
+			$category->id                      = $cat_id;
+			$category->name                    = $square_to_woo['square_to_woo']['target_categories'][ $cat_id ]['new_name'];
+			$result                            = $square_synchronizer->delete_woo_category( $category );
+
 			$woo_category_id = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['woo_id'] ) ) : '';
 			if ( false !== $result['status'] ) {
 				$delt_pro_array = array(
@@ -1187,18 +1225,19 @@ function woo_square_plugin_sync_square_category_to_woo() {
 					'item'    => 'category',
 					'message' => __( 'Successfully Deleted', 'woosquare' ),
 				);
+				if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+					$woo_product_delete_log_transient[ $woo_category_id ]['delete'] = $delt_pro_array;
+					$woo_product_delete_log_transient                               = array_merge( $woo_product_delete_log_transientt, $woo_product_delete_log_transient );
+					set_transient( 'woo_product_delete_log_transient', $woo_product_delete_log_transient, 300 );
+					$woo_delete_product_log_id_transient = get_transient( 'woo_delete_product_log_id_transient' );
+					$activate_modules_woosquare_plus     = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
+					if ( true === $activate_modules_woosquare_plus['items_sync_log']['module_activate'] ) {
+						$woosquare_sync_log = new WooSquare_Sync_Logs();
 
-				$woo_product_delete_log_transient[ $woo_category_id ]['delete'] = $delt_pro_array;
-				$woo_product_delete_log_transient                               = array_merge( $woo_product_delete_log_transientt, $woo_product_delete_log_transient );
-				set_transient( 'woo_product_delete_log_transient', $woo_product_delete_log_transient, 300 );
-				$woo_delete_product_log_id_transient = get_transient( 'woo_delete_product_log_id_transient' );
-				$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-				if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
-					$woosquare_sync_log = new WooSquare_Sync_Logs();
-
-					$log_id = $woosquare_sync_log->delete_product_log_data_request( $woo_product_delete_log_transient, $woo_delete_product_log_id_transient, 'category', 'square_to_woo' );
-					if ( ! empty( $log_id ) ) {
-						set_transient( 'woo_delete_product_log_id_transient', $log_id, 300 );
+						$log_id = $woosquare_sync_log->delete_product_log_data_request( $woo_product_delete_log_transient, $woo_delete_product_log_id_transient, 'category', 'square_to_woo' );
+						if ( ! empty( $log_id ) ) {
+								set_transient( 'woo_delete_product_log_id_transient', $log_id, 300 );
+						}
 					}
 				}
 			}
@@ -1206,22 +1245,6 @@ function woo_square_plugin_sync_square_category_to_woo() {
 			$action    = Helpers::ACTION_UPDATE;
 			break;
 	}
-	$session_category_name = isset( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories'][ $cat_id ]['name'] ) ) : '';
-	$session_parent_id     = isset( $_SESSION['square_to_woo']['target_categories']['parent_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories']['parent_id'] ) ) : '';
-
-	// log.
-	Helpers::sync_db_log(
-		$action,
-		gmdate( 'Y-m-d H:i:s' ),
-		Helpers::SYNC_TYPE_MANUAL,
-		Helpers::SYNC_DIRECTION_SQUARE_TO_WOO,
-		isset( $target_id ) ? $target_id : null,
-		Helpers::TARGET_TYPE_CATEGORY,
-		$result['status'] ? Helpers::TARGET_STATUS_SUCCESS : Helpers::TARGET_STATUS_FAILURE,
-		$session_category_name,
-		$session_parent_id,
-		$cat_id
-	);
 
 	echo esc_html( $result['status'] );
 	die();
@@ -1239,18 +1262,23 @@ function woo_square_plugin_sync_square_product_to_woo() {
 	if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 	}
+	global $wpdb;
 	session_start();
 	$result = false;  // default value for returned response.
+
 	if ( ! empty( $_POST['id'] ) ) {
 		$prod_square_id = sanitize_text_field( wp_unslash( $_POST['id'] ) );
 	}
-	if ( ! strcmp( $prod_square_id, 'modifier_set_end' ) ) {
+	$square_to_woo = get_transient( 'square_to_woo' );
 
+	if ( ! strcmp( $prod_square_id, 'modifier_set_end' ) ) {
 		if ( ! empty( $_SESSION['session_key_count'] ) && ! empty( $_SESSION['modifier_name_array'] ) && ! empty( $_SESSION['product_loop_id'] ) ) {
 			$session_product_loop_id     = isset( $_SESSION['product_loop_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['product_loop_id'] ) ) : '';
-			$session_modifier_name_array = isset( $_SESSION['modifier_name_array'] ) ? sanitize_text_field( wp_unslash( $_SESSION['modifier_name_array'] ) ) : '';
-			update_post_meta( $session_product_loop_id, 'product_modifier_group_name', $session_modifier_name_array );
+			$session_modifier_name_array = isset( $_SESSION['modifier_name_array'] ) && is_array( $_SESSION['modifier_name_array'] )
+			? array_map( 'sanitize_text_field', wp_unslash( $_SESSION['modifier_name_array'] ) )
+			: array();
 
+			update_post_meta( $session_product_loop_id, 'product_modifier_group_name', $session_modifier_name_array );
 		}
 		unset( $_SESSION['modifier_name_array'] );
 		unset( $_SESSION['session_key_count'] );
@@ -1263,16 +1291,24 @@ function woo_square_plugin_sync_square_product_to_woo() {
 
 		if ( ! strcmp( $prod_square_id, 'update_products' ) ) {
 
-			$square       = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
+			$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
+
 			$synchronizer = new SquareToWooSynchronizer( $square );
 			$square_items = $synchronizer->get_square_items();
 
 			// get all woocommerce products.
-			$posts_per_page = -1;
-			$args           = array(
+			$meta_query = 'meta_query';
+			$args       = array(
 				'post_type'      => 'product',
-				'posts_per_page' => $posts_per_page,
+				'posts_per_page' => -1,
+				$meta_query      => array(
+					array(
+						'key'     => 'square_id', // Only get products that have a Square ID (synced products).
+						'compare' => 'EXISTS',
+					),
+				),
 			);
+
 			// delete those product which is not exist square but exist in woocommerce.....
 			$woocommerce_products = get_posts( $args );
 
@@ -1280,24 +1316,23 @@ function woo_square_plugin_sync_square_product_to_woo() {
 				foreach ( $woocommerce_products as $product ) {
 
 					$square_id = get_post_meta( $product->ID, 'square_id', true );
-
-					if ( empty( session_id() ) && ! headers_sent() ) {
+					if ( session_status() === PHP_SESSION_NONE ) {
 						session_start();
 					}
-
 					$_SESSION['productid'] = $product->ID;
-					woo_square_plugin_sync_square_modifier_to_woo( $product->ID, $square_items );
-
+					if ( ! empty( $square_items->modifier_list_info ) ) {
+						woo_square_plugin_sync_square_modifier_to_woo( $product->ID, $square_items );
+					}
 					if ( ! empty( $square_id ) && ! empty( $square_items ) ) {
 
 						$product->existinsquare = false;
 						foreach ( $square_items as $square_item ) {
 							if ( $square_id === $square_item->id ) {
-								$product->existinsquare = true;
+									$product->existinsquare = true;
 							}
 						}
 						if ( ! $product->existinsquare ) {
-							if ( get_option( 'disable_auto_delete' ) !== 1 ) {
+							if ( ! get_option( 'disable_auto_delete' ) ) {
 								$square_product_delete_sync_log_transientt = get_transient( 'square_product_delete_sync_log_transient' );
 								if ( empty( $square_product_delete_sync_log_transientt ) ) {
 									$arr = array();
@@ -1325,15 +1360,13 @@ function woo_square_plugin_sync_square_product_to_woo() {
 								);
 								wp_delete_post( $product->ID, true );
 
-								$square_product_delete_sync_log_transient[ $product->ID ]['delete'] = $delt_pro_array;
-								$square_product_delete_sync_log_transient                           = array_merge( $square_product_delete_sync_log_transientt, $square_product_delete_sync_log_transient );
-								set_transient( 'square_product_delete_sync_log_transient', $square_product_delete_sync_log_transient, 300 );
-								$square_product_delete_sync_log_id_transient = get_transient( 'square_product_delete_sync_log_id_transient' );
-								$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-								if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
-									$woosquare_sync_log = new WooSquare_Sync_Logs();
-
-									$log_id = $woosquare_sync_log->delete_product_log_data_request( $square_product_delete_sync_log_transient, $square_product_delete_sync_log_id_transient, 'square_to_woo' );
+								if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+									$square_product_delete_sync_log_transient[ $product->ID ]['delete'] = $delt_pro_array;
+									$square_product_delete_sync_log_transient                           = array_merge( $square_product_delete_sync_log_transientt, $square_product_delete_sync_log_transient );
+									set_transient( 'square_product_delete_sync_log_transient', $square_product_delete_sync_log_transient, 300 );
+									$square_product_delete_sync_log_id_transient = get_transient( 'square_product_delete_sync_log_id_transient' );
+									$woosquare_sync_log                          = new WooSquare_Sync_Logs();
+									$log_id                                      = $woosquare_sync_log->delete_product_log_data_request( $square_product_delete_sync_log_transient, $square_product_delete_sync_log_id_transient, 'product', 'square_to_woo' );
 									if ( ! empty( $log_id ) ) {
 										set_transient( 'square_product_delete_sync_log_id_transient', $log_id, 300 );
 									}
@@ -1344,24 +1377,141 @@ function woo_square_plugin_sync_square_product_to_woo() {
 				}
 			}
 
-			if ( $square_items ) {
+			// delete those modifiers which is not exist square but exist in woocommerce.....
 
-				$square_items_keys                                   = array_keys( $square_items );
-				$square_items[ array_pop( $square_items_keys ) + 1 ] = get_transient( 'square_inventory' );
-				$new_modifier                                        = array();
+			if ( ! get_option( 'disable_auto_delete' ) ) {
+				$woo_square_location_id           = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
+				$token                            = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+				$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 
-				foreach ( $square_items as $val ) {
-					array_push( $new_modifier, $val );
+				$url             = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/list';
+				$headers         = array(
+					'Authorization' => 'Bearer ' . $token, // Use verbose mode in cURL to determine the format you want for this header.
+					'Content-Type'  => 'application/json',
+					'types'         => 'MODIFIER_LIST',
+				);
+				$response        = array();
+				$method          = 'GET';
+				$args            = array( 'types' => 'MODIFIER_LIST' );
+				$response        = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
+				$modifier_object = json_decode( $response['body'], true );
+				foreach ( $modifier_object as $square_mods ) {
+					$mod_ids[] = $square_mods['id'];
 				}
-				echo ( ( wp_json_encode( $new_modifier ) ) );
+				$get_results           = 'get_results';
+				$woocommerce_modifiers = $wpdb->$get_results( 'SELECT * FROM ' . $wpdb->prefix . 'woosquare_modifier' );
+				if ( ! empty( $woocommerce_modifiers ) ) {
+					foreach ( $woocommerce_modifiers as $woo_mod ) {
+
+						if ( ! empty( $mod_ids ) ) {
+							if ( ! in_array( $woo_mod->modifier_set_unique_id, $mod_ids, true ) ) {
+								$terms = get_terms(
+									array(
+										'taxonomy'   => 'pm_' . $woo_mod->modifier_slug . '_' . $woo_mod->modifier_id,
+										'hide_empty' => false,
+									)
+								);
+
+								foreach ( $terms as $term ) {
+												wp_delete_term( $term->term_id, 'pm_' . $woo_mod->modifier_slug . '_' . $woo_mod->modifier_id );
+								}
+								$get_results = 'get_results';
+								$wpdb->$get_results( 'DELETE FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_slug = '$woo_mod->modifier_slug'" );
+							}
+						}
+					}
+				}
+			}
+
+			if ( $square_items ) {
+				global $wpdb;
+
+				// Fetch WooCommerce products that are already synced with Square.
+				$meta_query           = 'meta_query';
+				$args                 = array(
+					'post_type'      => 'product',
+					'posts_per_page' => -1,
+					$meta_query      => array(
+						array(
+							'key'     => 'square_id', // Ensures only synced products are considered.
+							'compare' => 'EXISTS',
+						),
+					),
+				);
+				$get_posts            = 'get_posts';
+				$woocommerce_products = $get_posts( $args );
+				$existing_square_ids  = array();
+
+				if ( $woocommerce_products ) {
+					foreach ( $woocommerce_products as $product ) {
+						$square_id = get_post_meta( $product->ID, 'square_id', true );
+						if ( ! empty( $square_id ) ) {
+							$existing_square_ids[ $square_id ] = $product->ID; // Store mapped IDs.
+						}
+					}
+				}
+
+				// Filter Square items to keep only the ones that exist in WooCommerce.
+				$filtered_square_items = array();
+				foreach ( $square_items as $square_item ) {
+					if ( isset( $square_item->id ) && array_key_exists( $square_item->id, $existing_square_ids ) ) {
+						$filtered_square_items[] = $square_item; // Add only existing products.
+					}
+				}
+
+				// Add inventory data to filtered Square items.
+				$keys                                   = array_keys( $filtered_square_items );
+				$last_key                               = array_pop( $keys );
+				$filtered_square_items[ $last_key + 1 ] = get_transient( 'square_inventory' );
+
+				$new_modifier              = array();
+				$new_categories            = array();
+				$popup_selected_categories = get_transient( 'selected_sync_categories' );
+
+				foreach ( $filtered_square_items as $key => $val ) {
+					if ( isset( $val->id ) ) {
+						if ( isset( $popup_selected_categories ) && ! empty( $popup_selected_categories ) ) {
+							foreach ( $popup_selected_categories as $selected_category ) {
+								if ( isset( $val->category->id ) && $val->category->id === $selected_category ) {
+									array_push( $new_modifier, $val );
+								}
+							}
+						} else {
+							array_push( $new_modifier, $val );
+						}
+					} else {
+						$new_categories = $val;
+					}
+				}
+
+				$new_format  = array( $new_categories );
+				$after_merge = array_merge( $new_modifier, $new_format );
+
+				// CHECK FOR SKU MISSING ITEM SKIP FROM POPUP.
+				$newarr = array();
+				foreach ( $after_merge as $key => $variable ) {
+					if ( is_object( $variable ) && isset( $variable->variations ) && is_array( $variable->variations ) ) {
+						foreach ( $variable->variations as $variants ) {
+							if ( ! property_exists( $variants, 'sku' ) ) {
+								unset( $after_merge[ $key ] );
+							}
+						}
+					}
+					if ( ! empty( $after_merge[ $key ] ) ) {
+						$newarr[] = $after_merge[ $key ];
+					}
+				}
+
+				echo wp_json_encode( $newarr );
 				die();
 			}
 		}
 
 		if ( ! strpos( $prod_square_id, 'modifier' ) ) {
 
+			// add product action.
 			$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
-			
+
 			if ( empty( $square_product_sync_log_transientt ) ) {
 				$arr = array();
 				set_transient( 'square_product_sync_log_transient', $arr, 300 );
@@ -1369,21 +1519,17 @@ function woo_square_plugin_sync_square_product_to_woo() {
 
 			$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
 
-			// add product action.
-			if ( ! isset( $_SESSION['square_to_woo']['target_products'][ $prod_square_id ] ) ) {
+			if ( ! isset( $square_to_woo['square_to_woo']['target_products'][ $prod_square_id ] ) ) {
 				die();
 			}
 
-			$square                 = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
-			$square_synchronizer    = new SquareToWooSynchronizer( $square );
-			
-			$session_prod_square_id = isset( $_SESSION['square_to_woo']['target_products'][ $prod_square_id ] ) ? $_SESSION['square_to_woo']['target_products'][ $prod_square_id ] : '';
-			
-			if ( count( $_SESSION['square_to_woo']['target_products'][ $prod_square_id ]->variations ) <= 1 ) {  // simple product.
-				$id = $square_synchronizer->insert_simple_product_to_woo( $session_prod_square_id, get_transient( 'square_inventory' ) );
+			$square              = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
+			$square_synchronizer = new SquareToWooSynchronizer( $square );
 
+			if ( count( $square_to_woo['square_to_woo']['target_products'][ $prod_square_id ]->variations ) <= 1 ) {  // simple product.
+				$id = $square_synchronizer->insert_simple_product_to_woo( $square_to_woo['square_to_woo']['target_products'][ $prod_square_id ], get_transient( 'square_inventory' ) );
 			} else {
-				$id = $square_synchronizer->insert_variable_product_to_woo( $session_prod_square_id, get_transient( 'square_inventory' ) );
+				$id = $square_synchronizer->insert_variable_product_to_woo( $square_to_woo['square_to_woo']['target_products'][ $prod_square_id ], get_transient( 'square_inventory' ) );
 			}
 
 			$action = Helpers::ACTION_ADD;
@@ -1395,13 +1541,11 @@ function woo_square_plugin_sync_square_product_to_woo() {
 			if ( empty( session_id() ) && ! headers_sent() ) {
 				session_start();
 			}
-
-			$square_product_sync_log_transient[ $id['id'] ][ $id['pro_status'] ] = $id;
-			$square_product_sync_log_transient                                   = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
-			set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
-			$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+			if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+				$square_product_sync_log_transient[ $id['id'] ][ $id['pro_status'] ] = $id;
+				$square_product_sync_log_transient                                   = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
+				set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
+				$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
 				$woosquare_sync_log                   = new WooSquare_Sync_Logs();
 				$log_id                               = $woosquare_sync_log->log_data_request( $square_product_sync_log_transient, $square_product_sync_log_id_transient, 'square_to_woo', 'product' );
 				if ( ! empty( $log_id ) ) {
@@ -1410,22 +1554,6 @@ function woo_square_plugin_sync_square_product_to_woo() {
 			}
 			$_SESSION['productid']       = $id['id'];
 			$_SESSION['product_loop_id'] = $id['id'];
-			$session_product_name        = isset( $_SESSION['square_to_woo']['target_products'][ $prod_square_id ]->name ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_products'][ $prod_square_id ]->name ) ) : '';
-			$session_parent_id           = isset( $_SESSION['square_to_woo']['target_categories']['parent_id'] ) ? sanitize_text_field( wp_unslash( $_SESSION['square_to_woo']['target_categories']['parent_id'] ) ) : '';
-
-			// log.
-			Helpers::sync_db_log(
-				$action,
-				gmdate( 'Y-m-d H:i:s' ),
-				Helpers::SYNC_TYPE_MANUAL,
-				Helpers::SYNC_DIRECTION_SQUARE_TO_WOO,
-				is_numeric( $id['id'] ) ? $id['id'] : null,
-				Helpers::TARGET_TYPE_PRODUCT,
-				$result,
-				$session_parent_id,
-				$session_product_name,
-				$prod_square_id
-			);
 
 		} else {
 
@@ -1475,15 +1603,14 @@ function woo_square_plugin_sync_square_modifier_to_woo( $current_product_id, $pr
 		$session_key_count = sanitize_text_field( wp_unslash( $_SESSION['session_key_count'] ) );
 	}
 
-	$kkey = 0;
-
+	$kkey    = 0;
 	$get_row = 'get_row';
 	$prepare = 'prepare';
 	$get_var = 'get_var';
 	$queryy  = 'query';
-
 	if ( isset( $prod_square_id->modifier_list_info ) ) {
-		if ( ( count( $prod_square_id->modifier_list_info ) >= 1 ) ) {
+
+		if ( count( $prod_square_id->modifier_list_info ) >= 1 ) {
 
 			$modifier_update = array();
 
@@ -1493,7 +1620,7 @@ function woo_square_plugin_sync_square_modifier_to_woo( $current_product_id, $pr
 					$mod = json_decode( wp_json_encode( $mod ) );
 				}
 
-				if ( ! empty( $mod ) ) {
+				if ( ! empty( $mod ) && 1 === $mod->enabled ) {
 
 					$rowcount = $wpdb->$get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$mod->modifier_list_id '" );
 
@@ -1517,9 +1644,11 @@ function woo_square_plugin_sync_square_modifier_to_woo( $current_product_id, $pr
 						$methode = 'inserted';
 
 						woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $mod->mod_sets->name, $mod->modifier_list_id, $methode, $mod->mod_sets->name );
-						$mod_name                 = str_replace( ' ', '-', strtolower( $mod->mod_sets->name ) );
-						$modifier_update[ $kkey ] = 'pm' . _ . $mod_name . '_' . $lastid;
+						$mod_name = str_replace( ' ', '-', strtolower( $mod->mod_sets->name ) );
+
+						$modifier_update[ $kkey ]                              = 'pm' . _ . $mod_name . '_' . $lastid;
 						$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm' . _ . $mod_name . '_' . $lastid;
+						update_post_meta( $current_product_id, 'product_modifier_group_name', $modifier_update );
 
 					} elseif ( $rowcount >= 1 ) {
 
@@ -1539,66 +1668,64 @@ function woo_square_plugin_sync_square_modifier_to_woo( $current_product_id, $pr
 
 						woo_square_plugin_sync_square_modifier_child_to_woo( $modifer_id->modifier_id, $mod_name, $mod->modifier_list_id, $methode, $modifer_id->modifier_slug );
 
-						$mod_name                 = str_replace( ' ', '-', strtolower( $modifer_id->modifier_slug ) );
-						$modifier_update[ $kkey ] = 'pm' . _ . $mod_name . '_' . $modifer_id->modifier_id;
-						$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm' . _ . $mod_name . '_' . $modifer_id->modifier_id;
+						$mod_name = str_replace( ' ', '-', strtolower( $modifer_id->modifier_slug ) );
+
+						$modifier_update[ $kkey ]                              = 'pm_' . $mod_name . '_' . $modifer_id->modifier_id;
+						$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm_' . $mod_name . '_' . $modifer_id->modifier_id;
+						update_post_meta( $current_product_id, 'product_modifier_group_name', $modifier_update );
 					}
 				}
 
 				++$kkey;
 			}
-
-			update_post_meta( $current_product_id, 'product_modifier_group_name', $modifier_update );
-
-		} else {
-			// Create Modifier.
-
-			$modifier_name = ( explode( '_', $prod_square_id ) );
-
-			$modifier_set_name = str_replace( '-', ' ', $modifier_name[0] );
-			$modifier_set_id   = $modifier_name[1];
-
-			if ( ! empty( $modifier_set_name ) && ! empty( $modifier_set_id ) ) {
-
-				$rowcount        = $wpdb->$get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
-				$modifier_public = '0';
-				$modifier_option = '0';
-
-				if ( ( $rowcount < 1 ) ) {
-
-					$modifier = array(
-						'modifier_set_name'      => $modifier_set_name,
-						'modifier_slug'          => $modifier_set_name,
-						'modifier_public'        => $modifier_public,
-						'modifier_option'        => $modifier_option,
-						'modifier_set_unique_id' => $modifier_set_id,
-						'modifier_version'       => $modifier_name[2],
-					);
-					$insert   = 'insert';
-					$wpdb->$insert( $wpdb->prefix . 'woosquare_modifier', $modifier );
-					$lastid  = $wpdb->insert_id;
-					$methode = 'inserted';
-
-					woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier_set_name, $modifier_set_id, $methode, $modifier_set_name );
-					$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm' . _ . str_replace( ' ', '-', strtolower( $modifier_set_name ) ) . '_' . $lastid;
-				} elseif ( $rowcount >= 1 ) {
-
-					$modifer_change = $wpdb->$get_row( 'SELECT modifier_set_name,modifier_version FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
-					if ( $modifier_set_name !== $modifer_change->modifier_set_name ) {
-						$query      = 'UPDATE ' . $wpdb->prefix . 'woosquare_modifier SET modifier_set_name=%s, modifier_version=%d WHERE modifier_set_unique_id=%d';
-						$parameters = array( $modifier_set_name, $modifier_name[2], $modifier_set_id );
-						$wpdb->$queryy( $wpdb->$prepare( $query, $parameters ) );
-					}
-
-					$modifer_id = $wpdb->$get_row( 'SELECT modifier_id,modifier_slug FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
-
-					$methode = 'insert_updated';
-					woo_square_plugin_sync_square_modifier_child_to_woo( $modifer_id->modifier_id, $modifier_set_name, $modifier_set_id, $methode, $modifer_id->modifier_slug );
-					$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm' . _ . str_replace( ' ', '-', strtolower( $modifer_id->modifier_slug ) ) . '_' . $modifer_id->modifier_id;
-				}
-			}
-			++$kkey;
 		}
+	} else {
+		// Create Modifier.
+
+		$modifier_name = explode( '_', $prod_square_id );
+
+		$modifier_set_name = str_replace( '-', ' ', $modifier_name[0] );
+		$modifier_set_id   = $modifier_name[1];
+
+		if ( ! empty( $modifier_set_name ) && ! empty( $modifier_set_id ) ) {
+
+			$rowcount        = $wpdb->$get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
+			$modifier_public = '0';
+			$modifier_option = '0';
+
+			if ( ( $rowcount < 1 ) ) {
+
+				$modifier = array(
+					'modifier_set_name'      => $modifier_set_name,
+					'modifier_slug'          => $modifier_set_name,
+					'modifier_public'        => $modifier_public,
+					'modifier_option'        => $modifier_option,
+					'modifier_set_unique_id' => $modifier_set_id,
+					'modifier_version'       => $modifier_name[2],
+				);
+				$insert   = 'insert';
+				$wpdb->$insert( $wpdb->prefix . 'woosquare_modifier', $modifier );
+				$lastid  = $wpdb->insert_id;
+				$methode = 'inserted';
+
+				woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier_set_name, $modifier_set_id, $methode, $modifier_set_name );
+				$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm_' . str_replace( ' ', '-', strtolower( $modifier_set_name ) ) . '_' . $lastid;
+			} elseif ( $rowcount >= 1 ) {
+
+				$modifer_change = $wpdb->$get_row( 'SELECT modifier_set_name,modifier_version FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
+				if ( $modifier_set_name !== $modifer_change->modifier_set_name ) {
+					$query      = 'UPDATE ' . $wpdb->prefix . 'woosquare_modifier SET modifier_set_name=%s, modifier_version=%d WHERE modifier_set_unique_id=%d';
+					$parameters = array( $modifier_set_name, $modifier_name[2], $modifier_set_id );
+					$wpdb->$queryy( $wpdb->$prepare( $query, $parameters ) );
+				}
+				$modifer_id = $wpdb->$get_row( 'SELECT modifier_id,modifier_slug FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_set_unique_id = '$modifier_set_id' " );
+
+				$methode = 'insert_updated';
+				woo_square_plugin_sync_square_modifier_child_to_woo( $modifer_id->modifier_id, $modifier_set_name, $modifier_set_id, $methode, $modifer_id->modifier_slug );
+				$_SESSION['modifier_name_array'][ $session_key_count ] = 'pm_' . str_replace( ' ', '-', strtolower( $modifer_id->modifier_slug ) ) . '_' . $modifer_id->modifier_id;
+			}
+		}
+		++$kkey;
 	}
 
 	if ( $session_key_count >= 0 ) {
@@ -1643,22 +1770,30 @@ function woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier
 
 						foreach ( $modex as $mod ) {
 
-							$texonomy    = 'pm_' . strtolower( str_replace( ' ', '-', $modifier_set_name ) ) . '_' . ( $lastid );
+							$texonomy = 'pm_' . strtolower( str_replace( ' ', '-', $modifier_set_name ) ) . '_' . ( $lastid );
+
 							$parent_term = term_exists( $modifier_set_name, $texonomy ); // array is returned if taxonomy is given.
 
 							register_taxonomy( $texonomy, 'product', array( 'hierarchical' => false ) );
-							$term   = wp_insert_term(
+							$term    = wp_insert_term(
 								$mod['modifier_data']['name'], // the term.
 								$texonomy,
 								array(
 									'description' => $mod['id'],
 								)
 							);
-							$amount = $mod['modifier_data']['price_money']['amount'] / 100;
+							$amount  = $mod['modifier_data']['price_money']['amount'] / 100;
+							$ordinal = $mod['modifier_data']['ordinal'];
 							update_term_meta( $term['term_id'], 'term_meta_price', sanitize_text_field( $amount ) );
 							update_term_meta( $term['term_id'], 'term_meta_version', sanitize_text_field( $mod['version'] ) );
+							update_term_meta( $term['term_id'], 'term_meta_ordinal', sanitize_text_field( $ordinal ) );
+
+							update_term_meta( $term['term_id'], 'term_meta_set_name_ordinal', sanitize_text_field( $modex['ordinal'] ) );
 
 						}
+
+						// }
+
 					}
 				}
 			}
@@ -1666,88 +1801,71 @@ function woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier
 
 			global $wpdb;
 
-			$texonomy = 'pm_' . strtolower( str_replace( ' ', '-', $modifier_slug ) ) . '_' . ( $lastid );
-
-			$get_result = 'get_results';
-			$term_query = $wpdb->$get_result( ( 'SELECT term_id FROM ' . $wpdb->prefix . "term_taxonomy WHERE taxonomy = '$texonomy'" ) );
+			$texonomy    = 'pm_' . strtolower( str_replace( ' ', '-', $modifier_slug ) ) . '_' . ( $lastid );
+			$get_results = 'get_results';
+			$term_query  = $wpdb->$get_results( ( 'SELECT term_id FROM ' . $wpdb->prefix . "term_taxonomy WHERE taxonomy = '$texonomy'" ) );
 
 			if ( ! empty( $term_query ) ) {
-
 				foreach ( $term_query as $term ) {
-
 					$old_object = get_term_by( 'id', $term->term_id, $texonomy );
+					$old_term   = get_term( 'id', $term->term_id, $texonomy );
 
 					foreach ( $square_modifier as $key => $modifier ) {
 
 						if ( 'MODIFIER_LIST' === $modifier['type'] && $modifier_set_id === $modifier['id'] ) {
 
 							foreach ( $modifier['modifier_list_data'] as $key => $modex ) {
+								if ( isset( $modex ) && is_array( $modex ) ) {
+									foreach ( $modex as $mod ) {
 
-								foreach ( $modex as  $keyyy => $mod ) {
+										$mod_str = strtolower( str_replace( ' ', '-', $mod['modifier_data']['name'] ) );
 
-									$mod_str = strtolower( str_replace( ' ', '-', $mod['modifier_data']['name'] ) );
+										if ( isset( $modifier['modifier_list_data']['ordinal'] ) ) {
+												$modifier_set_ordinal = $modifier['modifier_list_data']['ordinal'];
+										}
 
-									if ( ! empty( $old_object ) ) {
-										if ( $mod['id'] === $old_object->description ) { // check modifier id.
-											if ( $mod_str !== $old_object->slug ) {
-												register_taxonomy( $texonomy, 'product', array( 'hierarchical' => false ) );
+										if ( isset( $old_object ) && isset( $old_object->description ) && $mod['id'] === $old_object->description ) {
 
-												$args = array(
-													'name' => $mod['modifier_data']['name'],
-													'description' => $mod['id'],
-												);
+											register_taxonomy( $texonomy, 'product', array( 'hierarchical' => false ) );
 
-												$term = wp_update_term(
-													$old_object->term_id,
-													$texonomy,
-													$args
-												);
+											$args = array(
+												'name' => $mod['modifier_data']['name'],
+												'description' => $mod['id'],
+											);
 
-												$amount      = ( $mod['modifier_data']['price_money']['amount'] / 100 );
-												$old_amount  = get_term_meta( $old_object->term_id, 'term_meta_price', true );
-												$old_version = get_term_meta( $old_object->term_id, 'term_meta_version', true );
+											$term = wp_update_term(
+												$old_object->term_id,
+												$texonomy,
+												$args
+											);
 
-												if ( $old_amount !== $amount ) {
-													update_term_meta( $old_object->term_id, 'term_meta_price', sanitize_text_field( $amount ) );
-												}
+													$amount  = ( $mod['modifier_data']['price_money']['amount'] / 100 );
+													$ordinal = ( $mod['modifier_data']['ordinal'] );
 
-												if ( $old_version !== $mod['version'] ) {
-													update_term_meta( $old_object->term_id, 'term_meta_version', sanitize_text_field( $mod['version'] ) );
-												}
+													$old_amount               = get_term_meta( $old_object->term_id, 'term_meta_price', true );
+													$old_ordinal              = get_term_meta( $old_object->term_id, 'term_meta_ordinal', true );
+													$old_modifier_set_ordinal = get_term_meta( $modifier['id'], 'term_meta_set_name_ordinal', true );
+													$old_version              = get_term_meta( $old_object->term_id, 'term_meta_version', true );
+
+											if ( $old_amount !== $amount ) {
+												update_term_meta( $old_object->term_id, 'term_meta_price', sanitize_text_field( $amount ) );
+											}
+
+											if ( $old_ordinal !== $ordinal ) {
+												update_term_meta( $old_object->term_id, 'term_meta_ordinal', sanitize_text_field( $ordinal ) );
+											}
+
+											update_term_meta( $old_object->term_id, 'term_meta_set_name_ordinal', sanitize_text_field( $modifier_set_ordinal ) );
+
+											if ( $old_version !== $mod['version'] ) {
+												update_term_meta( $old_object->term_id, 'term_meta_version', sanitize_text_field( $mod['version'] ) );
 											}
 										} else {
 
 											$mod_id         = $mod['id'];
 											$get_var        = 'get_var';
 											$rowcount_child = $wpdb->$get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . "term_taxonomy WHERE description = '$mod_id' " );
-											$texnomy        = $wpdb->$get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . "term_taxonomy WHERE taxonomy = '$texonomy' " );
-											if ( $texnomy >= 1 ) {
-
-												register_taxonomy( $texonomy, 'product', array( 'hierarchical' => false ) );
-
-												$args = array(
-													'name' => $mod['modifier_data']['name'],
-													'description' => $mod['id'],
-												);
-
-												$term = wp_update_term(
-													$old_object->term_id,
-													$texonomy,
-													$args
-												);
-
-												$amount      = ( $mod['modifier_data']['price_money']['amount'] / 100 );
-												$old_amount  = get_term_meta( $old_object->term_id, 'term_meta_price', true );
-												$old_version = get_term_meta( $old_object->term_id, 'term_meta_version', true );
-
-												if ( $old_amount !== $amount ) {
-													update_term_meta( $old_object->term_id, 'term_meta_price', sanitize_text_field( $amount ) );
-												}
-
-												if ( $old_version !== $mod['version'] ) {
-													update_term_meta( $old_object->term_id, 'term_meta_version', sanitize_text_field( $mod['version'] ) );
-												}
-											} elseif ( $rowcount_child < 1 ) {
+											if ( $rowcount_child < 1 ) {
 
 												register_taxonomy( $texonomy, 'product', array( 'hierarchical' => false ) );
 												$term = wp_insert_term(
@@ -1758,10 +1876,16 @@ function woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier
 													)
 												);
 
-												$amount = $mod['modifier_data']['price_money']['amount'] / 100;
-												update_term_meta( $term['term_id'], 'term_meta_price', sanitize_text_field( $amount ) );
-												update_term_meta( $term['term_id'], 'term_meta_version', sanitize_text_field( $mod['version'] ) );
+												if ( ! $term->errors ) {
+																		$amount  = $mod['modifier_data']['price_money']['amount'] / 100;
+																		$ordinal = $mod['modifier_data']['ordinal'];
+																		update_term_meta( $term['term_id'], 'term_meta_price', sanitize_text_field( $amount ) );
+																		update_term_meta( $term['term_id'], 'term_meta_ordinal', sanitize_text_field( $ordinal ) );
 
+																		update_term_meta( $term['term_id'], 'term_meta_set_name_ordinal', sanitize_text_field( $modifier_set_ordinal ) );
+																		update_term_meta( $term['term_id'], 'term_meta_version', sanitize_text_field( $mod['version'] ) );
+
+												}
 											}
 										}
 									}
@@ -1788,10 +1912,11 @@ function woo_square_plugin_sync_square_modifier_child_to_woo( $lastid, $modifier
  * Additionally, it updates relevant metadata and status.
  */
 function update_square_to_woo_action() {
-	if ( ! isset( $_POST['nonce'] ) || function_exists( 'wp_verify_nonce' ) && ! empty( $_POST['nonce'] ) &&  ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
+	if ( ! isset( $_POST['nonce'] ) ||
+		( function_exists( 'wp_verify_nonce' ) && ! empty( $_POST['nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'my_woosquare_ajax_nonce' ) )
+	) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 	}
-
 	$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
 	if ( empty( $woo_product_sync_log_transientt ) ) {
 		$arr = array();
@@ -1799,9 +1924,7 @@ function update_square_to_woo_action() {
 	}
 
 	$woo_product_sync_log_transientt = get_transient( 'woo_product_sync_log_transient' );
-
 	session_start();
-
 	if ( ! empty( $_POST['import_js_item'] ) ) {
 		// Get the JSON data from the POST request.
 		$json_items = sanitize_text_field( wp_unslash( $_POST['import_js_item'] ) );
@@ -1819,25 +1942,23 @@ function update_square_to_woo_action() {
 	$square       = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 	$synchronizer = new SquareToWooSynchronizer( $square );
 	// if not a new product or skipped product (has no skus).
+
 	if ( ( ! isset( $session_targets['target_products'][ $json_items->id ] ) )
 		&& ( ! isset( $session_targets['target_products']['skipped_products'] ) )
 	) {
-
 		$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
 		if ( empty( $square_product_sync_log_transientt ) ) {
 			$arr = array();
 			set_transient( 'square_product_sync_log_transient', $arr, 300 );
 		}
 
-		$square_product_sync_log_transientt = get_transient( 'square_product_sync_log_transient' );
-
 		$id = $synchronizer->add_product_to_woo( $json_items, get_transient( 'square_inventory' ) );
-		$square_product_sync_log_transient[ $id['id'] ][ $id['pro_status'] ] = $id;
-		$square_product_sync_log_transient                                   = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
-		set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
-		$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
-		$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-		if($activate_modules_woosquare_plus['items_sync_log']['module_activate'] == true){
+		if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
+			$square_product_sync_log_transientt                                  = get_transient( 'square_product_sync_log_transient' );
+			$square_product_sync_log_transient[ $id['id'] ][ $id['pro_status'] ] = $id;
+			$square_product_sync_log_transient                                   = array_merge( $square_product_sync_log_transientt, $square_product_sync_log_transient );
+			set_transient( 'square_product_sync_log_transient', $square_product_sync_log_transient, 300 );
+			$square_product_sync_log_id_transient = get_transient( 'square_product_sync_log_id_transient' );
 			$woosquare_sync_log                   = new WooSquare_Sync_Logs();
 			$log_id                               = $woosquare_sync_log->log_data_request( $square_product_sync_log_transient, $square_product_sync_log_id_transient, 'square_to_woo', 'product' );
 			if ( ! empty( $log_id ) ) {
@@ -1845,6 +1966,7 @@ function update_square_to_woo_action() {
 			}
 		}
 		echo esc_html( $id['id'] );
+
 		if ( ! empty( $id['id'] ) && is_numeric( $id['id'] ) ) {
 			update_post_meta( $id['id'], 'is_square_sync', 1 );
 			$result_stat = Helpers::TARGET_STATUS_SUCCESS;
@@ -1871,15 +1993,13 @@ function woo_square_plugin_terminate_manual_square_sync() {
 		update_option( 'woo_square_running_sync', false );
 		update_option( 'woo_square_running_sync_time', 0 );
 	}
-
-	session_start();
+	$square_to_woo = get_transient( 'square_to_woo' );
 
 	// ensure function is not called twice.
-	if ( ! isset( $_SESSION['square_to_woo'] ) ) {
+	if ( ! isset( $square_to_woo['square_to_woo'] ) ) {
 		return;
 	}
-
-	unset( $_SESSION['square_to_woo'] );
+	delete_transient( 'square_to_woo' );
 	echo '1';
 	die();
 }
@@ -1893,33 +2013,36 @@ function woo_square_plugin_terminate_manual_square_sync() {
  * This function is typically used in the plugin's settings page.
  */
 function enable_mode_checker() {
-	if ( ! isset( $_POST['mode_checker_nonce'] ) || function_exists( 'wp_verify_nonce' ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mode_checker_nonce'] ) ), 'sandbox-mode-checker' ) ) {
+
+	if ( ! isset( $_POST['mode_checker_nonce'] ) ||
+		( function_exists( 'wp_verify_nonce' ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mode_checker_nonce'] ) ), 'sandbox-mode-checker' ) )
+	) {
 		wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 	}
-	$woocommerce_square_settings      = get_option( 'woocommerce_square_settings' . get_transient( 'is_sandbox' ) );
+	$woocommerce_square_settings      = get_option( 'woocommerce_square_settings' );
 	$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 
 	if ( $woocommerce_square_plus_settings ) { // If we are using plus.
-		if ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_production' === $_POST['status'] ) {
-			$woocommerce_square_plus_settings['enable_sandbox'] = 'no';
+		if ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_sandbox' === $_POST['status'] ) {
+			$woocommerce_square_plus_settings['enable_sandbox'] = 'yes';
 			$msg = wp_json_encode(
 				array(
 					'status' => true,
-					'msg'    => esc_html__( 'Production Successfully Enabled!', 'woosquare' ),
+					'msg'    => esc_html__( 'Sandbox Successfully Enabled!', 'woosquare' ),
 				)
 			);
 
 			// Echo the message.
 			echo wp_kses_post( $msg );
-		} elseif ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_sandbox' === $_POST['status'] ) {
 
-			if ( 'no' === $woocommerce_square_plus_settings['enable_sandbox'] ) {
-				$woocommerce_square_plus_settings['enable_sandbox'] = 'yes';
-			}
+		} elseif ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_production' === $_POST['status'] ) {
+
+			$woocommerce_square_plus_settings['enable_sandbox'] = 'no';
+
 			$msg = wp_json_encode(
 				array(
 					'status' => true,
-					'msg'    => esc_html__( 'Sandbox Successfully Enabled!', 'woosquare' ),
+					'msg'    => esc_html__( 'Production Successfully Enabled!', 'woosquare' ),
 				)
 			);
 
@@ -1931,6 +2054,7 @@ function enable_mode_checker() {
 	} elseif ( empty( $woocommerce_square_plus_settings ) ) {
 		$woocommerce_square_plus_settings = array();
 		if ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_production' === $_POST['status'] ) {
+
 			$woocommerce_square_plus_settings['enable_sandbox'] = 'no';
 			$msg = wp_json_encode(
 				array(
@@ -1959,11 +2083,9 @@ function enable_mode_checker() {
 
 	if ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_production' === $_POST['status'] ) {
 		set_transient( 'is_sandbox', '', 50000000 );
-
 	} elseif ( ! empty( $_POST['action'] ) && 'enable_mode_checker' === $_POST['action'] && ! empty( $_POST['status'] ) && 'enable_sandbox' === $_POST['status'] ) {
 		set_transient( 'is_sandbox', 'sandbox', 50000000 );
 	}
-	$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 
 	die();
 }

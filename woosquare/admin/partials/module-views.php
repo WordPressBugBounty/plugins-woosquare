@@ -171,14 +171,13 @@
 </style>
 <div class="bodycontainerWrapModule">
 	<div class="titleBlock">
-		<h1 class="mtitle">Manage WC Shop Sync Addons</h1>
+		<h1 class="mtitle">Manage <?php echo esc_html( WOOSQU_PLUS_LABEL ); ?> Addons</h1>
 		<p>From here you can Enable/Disable addons as per your requirement.</p>
 	</div>
 	<?php
-		$data = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
-		parse_str( $data, $query_params );
+	$data = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
+	parse_str( $data, $query_params );
 	?>
-		
 	<div class="welcome-panel moduleListing<?php echo isset( $query_params['page'] ) ? esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ) ) ) : ''; ?>">
 		<div id="main" class="main section">
 
@@ -187,7 +186,6 @@
 			<?php
 			if ( $plugin_modules ) {
 				foreach ( $plugin_modules as $key => $module ) {
-
 					?>
 			<div class="post-outer">
 				<style>
@@ -212,33 +210,43 @@
 				</style>
 				<article class="hentry prtn-article">
 					<div class="prtn-article-image">
-									<?php if ( $module['module_activate'] ) { ?>
+					<?php if ( $module['module_activate'] ) { ?>
 					<div class="settingsWrap">
 
-										<?php if ( ! empty( $module['module_menu_details']['menu_slug'] ) && 'square-modifiers' !== $module['module_menu_details']['menu_slug'] ) : ?>
-						<a target="_blank"
-							href="<?php echo esc_url( get_admin_url() . 'admin.php?page=' . $module['module_menu_details']['menu_slug'] ); ?>">
+						<?php if ( ! empty( $module['module_menu_details']['menu_slug'] ) && 'square-modifiers' !== $module['module_menu_details']['menu_slug'] ) : ?>
+						<a
+						href="<?php echo esc_url( get_admin_url() . 'admin.php?page=' . $module['module_menu_details']['menu_slug'] ); ?>">
+							<span class="dashicons dashicons-admin-generic"></span>Setting
+						</a>
+						<?php elseif ( ! empty( $module['module_menu_details']['menu_slug'] ) && 'square-modifiers' === $module['module_menu_details']['menu_slug'] ) : ?>
+						<a
+						href="<?php echo esc_url( admin_url( 'edit.php?post_type=product&page=woosquare_modifier' ) ); ?>">
 							<span class="dashicons dashicons-admin-generic"></span>Setting
 						</a>
 						<?php endif; ?>
 					</div>
-					<?php }  if ( ! $module['is_premium'] ) { ?>
+						<?php
+					}
+					if ( ! $module['is_premium'] ) {
+						?>
 
 						<div class="switchWrap">
 							<div class="extonoffpp onoffswitch_<?php echo esc_html( $key ); ?>">
 								<input type="checkbox" name="onoffswitch_<?php echo esc_html( $key ); ?>"
 									class="onoffswitch-checkbox_<?php echo esc_html( $key ); ?> enable_plugin" id="myonoffswitch_<?php echo esc_html( $key ); ?>"
-										<?php
-										if ( false === ! $module['module_activate'] ) {
-											echo 'checked'; }
-										?>
+						<?php
+						if ( false === ! $module['module_activate'] ) {
+							echo 'checked';
+						}
+						?>
 										>
 								<label
 									class="
-										<?php
-										if ( $module['module_activate'] ) {
-											echo 'extonofflabel '; }
-										?>
+						<?php
+						if ( $module['module_activate'] ) {
+							echo 'extonofflabel ';
+						}
+						?>
 									onoffswitch-label_<?php echo esc_html( $key ); ?>"
 									for="myonoffswitch_<?php echo esc_html( $key ); ?>">
 									<span class="extonoff onoffswitch-inner_<?php echo esc_html( $key ); ?>"></span>
@@ -259,7 +267,6 @@
 							</div>
 						</div> 
 					<?php } ?>
-					 
 					<div class="prtn-post-image">
 
 						<div class="prtn-bgr"></div>
@@ -272,12 +279,8 @@
 					<div class="article-content">
 
 					<div class="entry-header clearfix">
-						<h3 class="entry-title"><a class="modules_title" target="_blank" href="<?php echo esc_url( $module['module_redirect'] ); ?>"
-								title="The aquatic life's are intresting">
-								<?php
-								echo esc_html( $module['module_title'] );
-								?>
-								</a>
+						<h3 class="entry-title"><a target="_blank" href="<?php echo esc_url( $module['module_redirect'] ); ?>"
+								title="The aquatic life's are intresting"><?php echo esc_html( $module['module_title'] ); ?></a>
 						</h3>
 					</div>
 
@@ -291,7 +294,7 @@
 						<a target="_blank" class="btn btnIncus waves-effect waves-light btn-rounded btn-primary"
 							href="<?php echo esc_url( $module['module_redirect'] ); ?>"><span class="hidemobile">Read More</span> <span
 								class="dashicons dashicons-media-text mobiletext"></span></a>
-										<?php if ( ! empty( $module['module_video'] ) ) { ?>
+					<?php if ( ! empty( $module['module_video'] ) ) { ?>
 
 						<a href="<?php echo esc_url( $module['module_video'] ); ?>"
 							class="btn btnIncus waves-effect waves-light btn-rounded btn-outline-primary videoBtn"
@@ -396,16 +399,15 @@
 							border-color: #23a8e1;
 						}
 					</style>
-
-									<?php
-										/*
-										<a class="btn-read ryt-btn" href=""><?php if(!$module['module_activate']){ echo 'Activate'; } else { echo 'Deactivate'; } ?></a>
-										*/
-									?>
+					<?php
+					/*
+					<a class="btn-read ryt-btn" href=""><?php if(!$module['module_activate']){ echo 'Activate'; } else { echo 'Deactivate'; } ?></a>
+					*/
+					?>
 					</div>
 				</article>
 			</div>
-							<?php
+					<?php
 				}
 			}
 			?>
@@ -435,15 +437,16 @@
 		</div>
 	</div>
 </div>
- 
+
+
 <script>
 	jQuery(document).ready(function () {
 		// Gets the video src from the data-src on each button
 		var videoSrc;
-		console.log(videoSrc);
+		//console.log(videoSrc);
 		jQuery('.videoBtn').click(function () {
 		videoSrc = jQuery(this).attr("href");
-		console.log(videoSrc);
+		//console.log(videoSrc);
 		});
 
 
@@ -458,7 +461,7 @@
 		jQuery('#myModal').on('hide.bs.modal', function (e) {
 		// a poor man's stop video
 		jQuery("#video").attr('src', videoSrc);
-		console.log(videoSrc);
+		//console.log(videoSrc);
 		})
 		// document ready  
 	});

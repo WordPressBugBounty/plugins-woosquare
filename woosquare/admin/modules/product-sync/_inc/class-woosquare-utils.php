@@ -232,10 +232,8 @@ class WooSquare_Utils {
 		}
 
 		if ( $include_category && isset( $square_item->category->id ) ) {
-
 			$wc_cat_id               = self::get_wc_category_id_for_square_category_id( $square_item->category->id ) ? array( $wc_cat_id ) : array();
 			$formatted['categories'] = $wc_cat_id;
-
 		}
 
 		if ( count( $square_item->variations ) > 1 ) {
@@ -467,6 +465,7 @@ class WooSquare_Utils {
 				$top_level_id = $category->term_id;
 
 			}
+
 			$square_cat_id = self::get_wc_term_square_id( $top_level_id );
 			if ( $square_cat_id ) {
 				return $square_cat_id;
@@ -519,8 +518,8 @@ class WooSquare_Utils {
 	public static function get_wc_category_id_for_square_category_id( $square_cat_id ) {
 
 		$categories = get_terms(
-			'product_cat',
 			array(
+				'taxonomy'   => 'product_cat',
 				'parent'     => 0,
 				'hide_empty' => false,
 				'fields'     => 'ids',
@@ -560,6 +559,7 @@ class WooSquare_Utils {
 	 * @return WC_Product|false Corresponding WooCommerce Product on successful match, false otherwise.
 	 */
 	public static function get_wc_product_for_square_item( $square_item ) {
+
 		$meta_query     = 'meta_query';
 		$wc_product_ids = get_posts(
 			array(
@@ -587,8 +587,9 @@ class WooSquare_Utils {
 		}
 
 		$square_item_skus = self::get_square_item_skus( $square_item );
-		$meta_query       = 'meta_query';
-		$wc_product_ids   = get_posts(
+
+		$meta_query     = 'meta_query';
+		$wc_product_ids = get_posts(
 			array(
 				'post_type'      => array( 'product', 'product_variation' ),
 				'post_status'    => 'publish', // this is ignored.

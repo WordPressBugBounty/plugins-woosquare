@@ -12,16 +12,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Square sync logging class which saves important data to the log
  *
- * @since 1.0.0
+ * @since   1.0.0
  * @version 1.0.0
  */
 class WooSquare_Sync_Logger {
 
-		/**
-		 * The logger instance for logging purposes.
-		 *
-		 * @var Logger
-		 */
+	/**
+	 * The logger instance for logging purposes.
+	 *
+	 * @var Logger
+	 */
 	public static $logger;
 	const WC_LOG_FILENAME = 'woocommerce-square-sync';
 

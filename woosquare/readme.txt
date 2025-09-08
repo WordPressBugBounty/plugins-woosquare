@@ -1,4 +1,4 @@
-﻿=== WC Shop Sync - Square Payment Gateway for WooCommerce, Inventory Sync Between Square and WooCommerce, Ultimate WooCommerce Square Plugin === 
+=== WC Shop Sync - Square Payment Gateway for WooCommerce, Inventory Sync Between Square and WooCommerce, Ultimate WooCommerce Square Plugin === 
 Plugin URI: https://wpexperts.io/
 Contributors: wpexpertsio
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=pay@objects.ws&item_name=DonationForPlugin
@@ -6,7 +6,7 @@ Tags: square, inventory sync, woocommerce Square, credit card, square payment ga
 Requires at least: 6.0
 Requires PHP: 7.0 
 Tested up to: 6.7
-Stable tag: 4.5.4
+Stable tag: 4.6.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,13 @@ Want to add Square Payment Gateway for WooCommerce? Download WC Shop Sync plugin
 
 == Description ==
 
- Can't keep your Square and WooCommerce store in sync❓ If so, then you need to install the ✨ **WC Shop Sync** ✨ plugin. 
+[👑 Get Pro](https://wcshopsync.com/pricing/?utm_source=wp_org&utm_medium=read_me) | [Documentation](https://apiexperts.io/documentation/woosquare-plus/?utm_source=wp_org&utm_medium=readme&utm_campaign=documentation) | [Support](https://objectsws.atlassian.net/servicedesk/customer/portal/5/group/38)
+
+###  All In One Soluution to Connect WooCommerce with Sqaure
+
+https://www.youtube.com/watch?v=_PmNGXUC6Y8&list=PLfn9RBQ-tb1BtYcNsRKlNoeeLN2m5ZolQ&index=12
+
+Can't keep your Square and WooCommerce store in sync❓ If so, then you need to install the ✨ **WC Shop Sync** ✨ plugin. 
 
 Besides just a credit card, using this ultimate WooCommerce Square plugin, you can add multiple payment options (i.e., **Google Pay, Apple Pay, Afterpay, Cash App, and ACH Payments**) to your WooCommerce store via Square.
 
@@ -200,10 +206,15 @@ For more in-depth information, visit our comprehensive [documentation page](http
 
 == Changelog ==
 
+= 4.6.0 =
+* Added - Support for new variation format to sync product variations in Square options.
+* Fixed - Issue where syncing from Square to WooCommerce with "Create new products" and "Update other products" deleted previously existing products in WooCommerce.
+* Fixed - Issue with variation images not syncing correctly from Square to WooCommerce.
+* code  - optimization.
+
 = 4.5.4 =
 * Added - compatibility with the latest WordPress and WooCommerce.
 * Improved code optimization.
-
 
 = 4.5.3 =
 * Fixed - ACH payment issue fixed.
@@ -307,10 +318,10 @@ For more in-depth information, visit our comprehensive [documentation page](http
 * Added - Google Pay Support Added
 
 = 3.7.3 =
-* Added - re-review wordpress revamp for Out of Date Libraries,Data Must be Sanitized and Generic function
+* Added - re-review WordPress revamp for Out of Date Libraries,Data Must be Sanitized and Generic function
 
 = 3.7.2 =
-* Added - re-review wordpress revamp according to wordpress.org pattern.
+* Added - re-review WordPress revamp according to wordpress.org pattern.
 
 = 3.7 =
 * Added - Cartflow Compatibility with Upsell/DownSell.
@@ -342,7 +353,7 @@ For more in-depth information, visit our comprehensive [documentation page](http
 
 = 3.5 =
 * Added - code quality.
-* Enhancement – Added compatibility for Wordpress 5.3.2
+* Enhancement – Added compatibility for WordPress 5.3.2
 * Enhancement – Added compatibility for WooCommerce 3.8.1
 
 = 3.2.2 =
@@ -395,9 +406,9 @@ Fix - Selected payment location.
 
 = 2.6 =
 
-* Enhancement – Added compatibility for Wordpress 5.0.1 
+* Enhancement – Added compatibility for WordPress 5.0.1 
 * Enhancement – Added compatibility for WooCommerce 3.5.2
-* Enhancement - Manage Stock management conditions.	 
+* Enhancement - Manage Stock management conditions.  
 
 = 2.4 =
  

@@ -2,8 +2,8 @@
 /**
  * Fired during plugin deactivation
  *
- * @link       wpexperts.io
- * @since      1.0.0
+ * @link  wpexperts.io
+ * @since 1.0.0
  *
  * @package    Woosquare_Plus
  * @subpackage Woosquare_Plus/includes
@@ -17,16 +17,16 @@
  * @since      1.0.0
  * @package    Woosquare_Plus
  * @subpackage Woosquare_Plus/includes
- * @author     Wpexpertsio <support@wpexperts.io>
  */
 class Woosquare_Plus_Deactivator {
+
 
 	/**
 	 * Short Description. (use period)
 	 *
 	 * Long Description.
 	 *
-	 * @since    1.0.0
+	 * @since 1.0.0
 	 */
 	public static function deactivate() {
 	}

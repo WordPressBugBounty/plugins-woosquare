@@ -2,12 +2,14 @@
 	'use strict';
 
 	const afterpay_appId = square_afterpay_params.application_id;
-	const afterpay_locationId = square_afterpay_params.lid;
+	const afterpay_location_id = square_afterpay_params.lid;
 	
 	function buildPaymentRequest(payments) {
-		if(jQuery('form.wc-block-checkout__form').length > 0){
-			var id_of_div = jQuery('.wc-block-components-totals-item__value').html();
-			var total_price = id_of_div.split(square_afterpay_params.currency_symbl)[1];
+		
+		/*if(jQuery('form.wc-block-checkout__form').length > 0){
+			var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html(); 
+			var total_price = id_of_div.split(square_afterpay_params.currency_sym)[1];
+			var total_price = total_price.replace(" ", "");
 			// var total = total.substring(1, total.length);
 			// var total_price = total.toString();
 		}else{
@@ -15,9 +17,10 @@
 			var total = id_of_div.split("span")[2];
 			var total = total.substring(1, total.length);
 			var total_price = total.toString();
-		}
-		var total_price = total_price.replace(",", ""); 
-		//console.log(total_price);
+		}*/
+		
+		var total_price = square_afterpay_params.order_total; 
+		console.log(total_price);
 		const req = payments.paymentRequest({
 			countryCode: square_afterpay_params.country_code,
 			currencyCode: square_afterpay_params.currency_code,
@@ -54,19 +57,21 @@
 	let afterpay;
 
 	async function initializeAfterpay(payments) {
-		const paymentRequest = buildPaymentRequest(payments);
+
 		if(jQuery('#afterpay-button').html().length > 1){
 			afterpay.destroy();
 		}
-		afterpay = await payments.afterpayClearpay(paymentRequest);
 
+		const paymentRequest = buildPaymentRequest(payments)
+		afterpay = await payments.afterpayClearpay(paymentRequest);
+		
 		setTimeout(function(){ 	 
+			    
 			afterpay.attach('#afterpay-button');
 			jQuery('#afterpay-initialization').hide();
-			jQuery('#rendering_afterpay_gateway').hide();
 			const afterpayButton = document.getElementById('afterpay-button');
 			
-			async function handlePaymentMethodSubmission(event, paymentMethod) {
+			async function handlePaymentMethodSubmissionafterpay(event, paymentMethod) {
 				event.preventDefault();
 				try {
 					// disable the submit button as we await tokenization and make a
@@ -80,16 +85,17 @@
 				}
 			}
 			
+			
 			if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_after_pay'+square_afterpay_params.sandbox
 				|| jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox
 			){
     			afterpayButton.addEventListener('click', async function (event) {
-					await handlePaymentMethodSubmission(event, afterpay);
+					await handlePaymentMethodSubmissionafterpay(event, afterpay);
 				});
 			}
 			
-		}, 1000);
-		// return afterpay;
+		}, 10);
+		
 	}
 	
 	async function tokenize(paymentMethod) {
@@ -99,17 +105,21 @@
 		if (tokenResult.status === 'OK') {
 			
 			var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
+			// inject nonce to a hidden field to be submitted
+			/*$form.append( '<input type="hidden" class="errors" name="errors" value="' + errors + '" />' );
+			 $form.append( '<input type="hidden" class="noncedatatype" name="noncedatatype" value="' + noncedatatype + '" />' );
+			 $form.append( '<input type="hidden" class="cardData" name="cardData" value="' + cardData + '" />' );
+			 */
 			$form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
 
-			if(jQuery('form.wc-block-checkout__form').length > 0){
+
+			if( jQuery('form.wc-block-checkout__form').length > 0 ){
 				if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox){
 					jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
 				}
 			}else{
 				$form.submit();
 			}
-			
-			// console.debug('Payment Success', displayPaymentResults);
 		} else {
 			let errorMessage = tokenResult.status;
 			if (tokenResult.errors) {
@@ -135,59 +145,92 @@
 
 		statusContainer.style.visibility = 'visible';
 	}
-	function init_afterpay(afterpay,payments){
+	function initp(afterpay,payments){
 		try {
 			afterpay = initializeAfterpay(payments);
-			// return afterpay;
 		} catch (e) {
 			console.error('Initializing After Pay failed', e);
 			return;
 		}
 	}
-	// document.addEventListener('DOMContentLoaded', async function () {
 	jQuery( window  ).on("load", function() {
 		if (!window.Square) {
 			throw new Error('Square.js failed to load properly');
 		}
-		const payments = window.Square.payments(afterpay_appId, afterpay_locationId);
+		const payments = window.Square.payments(afterpay_appId, afterpay_location_id);
+		// 🕒 Keep checking for selected payment method
+		const pollInterval = setInterval(() => {
+			const selectedValue = jQuery("input[name=radio-control-wc-payment-method-options]:checked").val();
 
-		// let afterpay;
-		if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox ){
-			if(jQuery('#afterpay-button').html().length > 1){
-				afterpay.destroy();
-			}
-			try {
-				if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox ){
+			// ✅ Check if Square After Pay is selected
+			if (selectedValue === 'square_after_pay' + square_afterpay_params.sandbox) {
+				console.log("✅ Square After Pay selected, initializing...");
+
+				clearInterval(pollInterval); // ✅ Stop checking
+
+				if (jQuery('#afterpay-button').html().length > 1) {
+					afterpay?.destroy();
+				}
+
+				try {
 					jQuery('#afterpay-initialization').show();
 					afterpay = initializeAfterpay(payments);
+				} catch (e) {
+					jQuery('#afterpay-initialization').hide();
+					console.error('Initializing After Pay failed', e);
 				}
-				// return afterpay;
-			} catch (e) {
-			jQuery('#afterpay-initialization').hide();
-				console.error('Initializing After Pay failed', e);
-				return;
 			}
+		}, 500); // 🔁 Check every 500ms
+
+		if (jQuery('.payment_method_square_ach_payment' + square_afterpay_params.sandbox).length === 0) {
+
+			let attempts = 0;
+			const maxAttempts = 10;
+
+			const intervalId = setInterval(function () {
+				attempts++;
+				const $afterpayBtn = jQuery('#afterpay-button');
+
+
+				if ($afterpayBtn.length > 0) {
+
+					try {
+					   
+						jQuery('#afterpay-initialization').show();
+						afterpay = initializeAfterpay(payments);
+					} catch (e) {
+						jQuery('#afterpay-initialization').hide();
+					}
+
+					clearInterval(intervalId);
+				}
+
+				if (attempts >= maxAttempts) {
+					console.warn('[Afterpay] Max attempts reached. Stopping interval.');
+					clearInterval(intervalId);
+				}
+			}, 500); // Checks every 500ms
 		}
-		if(jQuery('.payment_method_square_ach_payment'+square_afterpay_params.sandbox ).length == 0){ 
-			jQuery( document.body ).on( 'updated_checkout', function() {
-				if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_after_pay'+square_afterpay_params.sandbox ){
+		jQuery(document).on('change', 'body.woocommerce-checkout', function() {
+			setTimeout(() => {
+				if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox ){
 					if(jQuery('#afterpay-button').html().length > 1){
 						afterpay.destroy();
 					}
 					try {
-						if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_after_pay'+square_afterpay_params.sandbox ){
-							jQuery('#afterpay-initialization').show();
+						if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_after_pay'+square_afterpay_params.sandbox ){
+								jQuery('#afterpay-initialization').show();
 							afterpay = initializeAfterpay(payments);
 						}
 						// return afterpay;
 					} catch (e) {
-			jQuery('#afterpay-initialization').hide();
+					jQuery('#afterpay-initialization').hide();
 						console.error('Initializing After Pay failed', e);
 						return;
 					}
 				}
-			})
-		}
+			}, 1000);
+		})
 		$('form.checkout').on('change', '.woocommerce-checkout-payment input', function(){
 			if(jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_after_pay'+square_afterpay_params.sandbox ){
 				if(jQuery('#afterpay-button').html().length > 1){
@@ -236,3 +279,5 @@
 
 
 }( jQuery ) );
+
+

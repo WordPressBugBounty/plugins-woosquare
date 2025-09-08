@@ -2,8 +2,8 @@
 /**
  * Fired during plugin activation
  *
- * @link       wpexperts.io
- * @since      1.0.0
+ * @link  wpexperts.io
+ * @since 1.0.0
  *
  * @package    Woosquare_Plus
  * @subpackage Woosquare_Plus/includes
@@ -17,21 +17,23 @@
  * @since      1.0.0
  * @package    Woosquare_Plus
  * @subpackage Woosquare_Plus/includes
- * @author     Wpexpertsio <support@wpexperts.io>
  */
 class Woosquare_Plus_Activator {
+
 
 	/**
 	 * Short Description. (use period)
 	 *
 	 * Long Description.
 	 *
-	 * @since    1.0.0
+	 * @since 1.0.0
 	 */
 	public static function activate() {
 
 		$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-
+		if ( get_option( 'disable_auto_delete' ) === false ) {
+			update_option( 'disable_auto_delete', 1 );
+		}
 		if ( empty( $activate_modules_woosquare_plus ) && ! empty( get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) ) {
 			delete_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) );
 		}
@@ -44,7 +46,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'syncing-of-products-6',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/E-gVN51P9lk' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['items_sync']['module_activate'] ) ? true : false,
-				'is_premium'           => false,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Sync Products', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -63,7 +64,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'syncing-of-products-6',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/E-gVN51P9lk' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['items_sync_log']['module_activate'] ) ? true : false,
-				'is_premium'           => false,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Sync Products logs', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -82,7 +82,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'square-payment-gateway-8',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/-uYI_a-k9Eo' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_payment']['module_activate'] ) ? true : false,
-				'is_premium'           => false,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Payment Settings', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -101,7 +100,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'order-synchronization-8',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/bDzRLARmRzQ' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['sales_sync']['module_activate'] ) ? true : false,
-				'is_premium'           => true,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Order Sync', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -119,7 +117,6 @@ class Woosquare_Plus_Activator {
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#customer-synchronisation-6' ),
 				'module_slug'          => 'customer-synchronisation-6',
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['customer_sync']['module_activate'] ) ? true : false,
-				'is_premium'           => true,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Customers Sync', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -139,7 +136,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'transaction-notes-7',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/s2inxilrncc' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_transaction_addon']['module_activate'] ) ? true : false,
-				'is_premium'           => true,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Transaction Notes', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -158,7 +154,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'save-cards-at-checkout-6',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/YVnjPEUWg8U' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_card_on_file']['module_activate'] ) ? true : false,
-				'is_premium'           => true,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Save cards', 'woosquare' ),
 					'parent_slug'       => 'square-settings',
@@ -178,7 +173,6 @@ class Woosquare_Plus_Activator {
 				'module_slug'          => 'square-modifiers-4',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/XnC0cOoWx-k' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_modifiers']['module_activate'] ) ? true : false,
-				'is_premium'           => true,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Square Modifiers', 'woosquare' ),
 					'parent_slug'       => 'square-modifiers',
@@ -191,75 +185,111 @@ class Woosquare_Plus_Activator {
 			),
 		);
 
-			$plugin_modules['module_page'] = array(
-				'module_activate'     => true,
-				'module_menu_details' => array(
-					'menu_title'        => __( 'Plugin Module', 'woosquare' ),
-					'parent_slug'       => 'square-settings',
-					'page_title'        => __( 'WC Shop Sync Module', 'woosquare' ),
-					'capability'        => 'manage_options',
-					'menu_slug'         => 'woosquare-plus-module',
-					'tab_html_class'    => '',
-					'function_callback' => 'woosquare_plus_module_page',
-				),
+		$path         = plugin_dir_path( __FILE__ );
+		$plugins_pos  = strpos( $path, 'plugins' );
+		$plugins_path = substr( $path, $plugins_pos );
+		// Split the path into parts using the directory separator.
+		$path_parts = explode( DIRECTORY_SEPARATOR, $plugins_path );
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			include_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$plugin_data = get_plugin_data( ABSPATH . 'wp-content/plugins/' . $path_parts[1] . '/woocommerce-square-integration.php' );
+		if ( 'WC Shop Sync - Connect Square with WooCommerce' === $plugin_data['Name'] ) {
+			// free WordPress org.
+			$plugin_modules['items_sync']['is_premium']                  = false;
+			$plugin_modules['woosquare_payment']['is_premium']           = false;
+			$plugin_modules['items_sync_log']['is_premium']              = false;
+			$plugin_modules['woosquare_modifiers']['is_premium']         = true;
+			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
+			$plugin_modules['customer_sync']['is_premium']               = true;
+			$plugin_modules['woosquare_transaction_addon']['is_premium'] = true;
+			$plugin_modules['sales_sync']['is_premium']                  = true;
+			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
+				define( 'WOOSQU_PLUS_LABEL', 'WC Shop Sync Settings' );
+			}
+		}
+		if ( 'WC Shop Sync Pro (Premium)' === $plugin_data['Name'] ) {
+			// freemius plus.
+			$plugin_modules['items_sync']['is_premium']                  = false;
+			$plugin_modules['woosquare_payment']['is_premium']           = false;
+			$plugin_modules['items_sync_log']['is_premium']              = false;
+			$plugin_modules['woosquare_modifiers']['is_premium']         = false;
+			$plugin_modules['woosquare_card_on_file']['is_premium']      = false;
+			$plugin_modules['customer_sync']['is_premium']               = false;
+			$plugin_modules['woosquare_transaction_addon']['is_premium'] = false;
+			$plugin_modules['sales_sync']['is_premium']                  = false;
+			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
+				define( 'WOOSQU_PLUS_LABEL', 'WC Shop Sync Pro' );
+			}
+		}
+		if ( 'Woosquare Payment' === $plugin_data['Name'] ) {
+			// woocommerce-square-up-payment-gateway/19692778.
+			$plugin_modules['items_sync']['is_premium']                  = true;
+			$plugin_modules['items_sync_log']['is_premium']              = true;
+			$plugin_modules['woosquare_modifiers']['is_premium']         = true;
+			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
+			$plugin_modules['customer_sync']['is_premium']               = true;
+			$plugin_modules['sales_sync']['is_premium']                  = true;
+			$plugin_modules['woosquare_payment']['is_premium']           = false;
+			$plugin_modules['woosquare_transaction_addon']['is_premium'] = false;
+			$plugin_modules['items_sync']['module_activate']             = false;
+			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
+				define( 'WOOSQU_PLUS_LABEL', 'Square Payment' );
+			}
+		}
+		if ( 'WooSquare Pro' === $plugin_data['Name'] ) {
+			// woocommerce-square-up-payment-gateway/19692778.
+			$plugin_modules['woosquare_modifiers']['is_premium']         = true;
+			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
+			$plugin_modules['items_sync_log']['is_premium']              = true;
+			$plugin_modules['customer_sync']['is_premium']               = true;
+			$plugin_modules['items_sync']['is_premium']                  = false;
+			$plugin_modules['woosquare_transaction_addon']['is_premium'] = true;
+			$plugin_modules['woosquare_payment']['is_premium']           = false;
+			$plugin_modules['sales_sync']['is_premium']                  = false;
+			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
+				define( 'WOOSQU_PLUS_LABEL', 'WC Shop Sync Pro' );
+			}
+		}
+
+		$plugin_modules['module_page'] = array(
+			'module_activate'     => true,
+			'module_menu_details' => array(
+				'menu_title'        => 'Plugin Module',
+				'parent_slug'       => 'square-settings',
+				'page_title'        => 'WC Shop Sync Module',
+				'capability'        => 'manage_options',
+				'menu_slug'         => 'woosquare-plus-module',
+				'tab_html_class'    => '',
+				'function_callback' => 'woosquare_plus_module_page',
+			),
+		);
+
+		update_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), $plugin_modules );
+
+		/*
+		* square activation
+		*/
+
+		$user_id = username_exists( 'square_user' );
+		if ( ! $user_id ) {
+			$random_password = wp_generate_password( 12 );
+			$user_id         = wp_create_user( 'square_user', $random_password );
+			wp_update_user(
+				array(
+					'ID'         => $user_id,
+					'first_name' => 'Square',
+					'last_name'  => 'User',
+				)
 			);
-
-			update_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), $plugin_modules );
-
-			/*
-			* square activation
-			*/
-
-			$user_id = username_exists( 'square_user' );
-			if ( ! $user_id ) {
-				$random_password = wp_generate_password( 12 );
-				$user_id         = wp_create_user( 'square_user', $random_password );
-				wp_update_user(
-					array(
-						'ID'         => $user_id,
-						'first_name' => 'Square',
-						'last_name'  => 'User',
-					)
-				);
-			}
-			// check begin time exist for payment.
-			if ( ! get_option( 'square_payment_begin_time' ) ) {
-				update_option( 'square_payment_begin_time', gmdate( 'Y-m-d\TH:i:s\Z' ) );
-
-			}
-
-			deactivate_plugins( 'woosquare-pro/woocommerce-square-integration.php' );
-			deactivate_plugins( 'woosquare-payment/woosquare-payment.php' );
-			deactivate_plugins( 'wc-square-recurring-premium/wc-square-recuring.php' );
-			$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
-			if ( isset( $activate_modules_woosquare_plus['items_sync_log']['module_activate'] ) && true === $activate_modules_woosquare_plus['items_sync_log']['module_activate'] ) {
-				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-				global $wpdb;
-				$sync_logs_table = $wpdb->prefix . WOO_SQUARE_ITEM_SYNC_LOGS_TABLE;
-				$get_var         = 'get_var';
-				if ( $wpdb->$get_var( "SHOW TABLES LIKE '$sync_logs_table'" ) !== $sync_logs_table ) {
-
-					if ( ! empty( $wpdb->charset ) ) {
-						$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-					}
-					if ( ! empty( $wpdb->collate ) ) {
-						$charset_collate .= " COLLATE $wpdb->collate";
-					}
-
-					$sql = "CREATE TABLE IF NOT EXISTS $sync_logs_table (
-						id INT(11) NOT NULL AUTO_INCREMENT,
-						log_time DATETIME NOT NULL,
-						status TEXT NOT NULL,
-						message TEXT NOT NULL,
-						sync_direction TEXT NOT NULL,
-						item TEXT NOT NULL,
-						enviroment TEXT NOT NULL,
-						data TEXT NOT NULL,
-						PRIMARY KEY (id)
-					) $charset_collate;";
-
-					dbDelta( $sql );
-				}
-			}
+		}
+		// check begin time exist for payment.
+		if ( ! get_option( 'square_payment_begin_time' . get_transient( 'is_sandbox' ) ) ) {
+			// 2013-01-15T00:00:00Z.
+			update_option( 'square_payment_begin_time' . get_transient( 'is_sandbox' ), gmdate( 'Y-m-d' ) . 'T00:00:00Z' );
+		}
+		deactivate_plugins( 'woosquare-pro/woocommerce-square-integration.php' );
+		deactivate_plugins( 'woosquare-payment/woosquare-payment.php' );
+		deactivate_plugins( 'wc-square-recurring-premium/wc-square-recuring.php' );
 	}
 }

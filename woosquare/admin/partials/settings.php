@@ -8,20 +8,22 @@
  */
 
 ?>
+
 <div class="bodycontainerWrap bodycontainerConnect">
-<div class="squareConnectScreen">
-	<?php if ( $success_message ) : ?>
-	<div class="updated">
-		<p><?php echo esc_html( $success_message ); ?></p>
-	</div>
-	<?php endif; ?>
-	<?php if ( $error_message ) : ?>
-	<div class="error">
-		<p><?php echo esc_html( $error_message ); ?></p>
-	</div>
-	<?php endif; ?>
+	<div class="squareConnectScreen">
+		<?php if ( $success_message ) : ?>
+		<div class="updated">
+			<p><?php echo esc_html( $success_message ); ?></p>
+		</div>
+		<?php endif; ?>
+		<?php if ( $error_message ) : ?>
+		<div class="error">
+			<p><?php echo esc_html( $error_message ); ?></p>
+		</div>
+		<?php endif; ?>
+		
 	<style>
-			
+				
 				.woosquare_auth_box  .onoffswitch-checkbox {
 				position: absolute;
 				opacity: 0;
@@ -96,7 +98,7 @@
 			parse_str( $data, $query_params );
 			?>
 	<div class="squareConnectBlock1 welcome-panel ext-panel <?php echo esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ?? '' ) ) ); ?>-1">
-			<div class="woosquare_auth_box">
+	<div class="woosquare_auth_box">
 				<div class="onoffswitch">
 					<div class="switches-container">
 						<?php
@@ -122,11 +124,11 @@
 				</div>
 			</div> 
 		
-		<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { ?>
+			
 		<div class="headerin">
-			<a href="https://apiexperts.io/documentation/apiexperts-square-for-woocommerce/"
+			<a href="https://apiexperts.io/woosquare-plus-documentation/?utm_source=WordPress&utm_medium=PluginDocumentation&utm_campaign=InStore#getting-started-2"
 				data-toggle="popover" data-trigger="hover"
-				data-content="Dear user, by clicking on the symbol of documentation, you will lead to an instructions guide for connecting your square account with WC Shop Sync.">
+				data-content="Dear user, by clicking on the symbol of documentation, you will lead to an instructions guide for connecting your square account with <?php echo esc_html( WOOSQU_PLUS_LABEL ); ?>.">
 				<svg class="docico" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
 					version="1.1" id="Capa_1" x="0px" y="0px" viewBox="0 0 367.6 367.6"
 					style="enable-background:new 0 0 367.6 367.6;" xml:space="preserve" width="18px" height="18px"
@@ -157,68 +159,68 @@
 					</g>
 				</svg> Documentation</a>
 		</div>
-
+			<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { ?>
 		<h3>WELCOME (We’re glad, you’re here)</h3>
-		<?php } else { ?>
+			<?php } else { ?>
 		<h3>THUMBS UP! You have done it.</h3>
-		<?php } ?>
-
-
-
+			<?php } ?>
 		
-		<form method="post">
 
-			
+			<form method="post">
 			<?php
+
+				$sndbox = false;
 			if ( get_transient( 'is_sandbox' ) === 'sandbox' ) {
 				$sndbox = true;
-			} else {
-				$sndbox = false;
 			}
-			$redirect_url = add_query_arg(
-				array(
+
+				$sqarg = array(
 					'woosquare_sandbox' => $sndbox,
 					'page'              => 'square-settings',
 					'app_name'          => WOOSQU_PLUS_APPNAME,
 					'plug'              => WOOSQU_PLUS_PLUGIN_NAME,
-				),
-				admin_url( 'admin.php' )
-			);
+				);
 
-			$redirect_url = wp_nonce_url( $redirect_url, 'connect_woosquare', 'wc_woosquare_token_nonce' );
+				$redirect_url = add_query_arg(
+					$sqarg,
+					admin_url( 'admin.php' )
+				);
 
-			$scopes     = apply_filters( 'custom_scopes_filter', 'MERCHANT_PROFILE_READ,ITEMS_READ,ITEMS_WRITE,PAYMENTS_READ,PAYMENTS_WRITE,INVENTORY_WRITE,ORDERS_WRITE,CUSTOMERS_READ,CUSTOMERS_WRITE,INVENTORY_READ,LOYALTY_READ,LOYALTY_WRITE,ORDERS_READ' );
-			$query_args = array(
+				$redirect_url = wp_nonce_url( $redirect_url, 'connect_woosquare', 'wc_woosquare_token_nonce' );
 
-				'redirect' => rawurlencode( rawurlencode( $redirect_url ) ),
-				'scopes'   => $scopes,
-			);
-			$url        = WOOSQU_PLUS_CONNECTURL . '/login/';
 
-			$production_connect_url = add_query_arg( $query_args, $url );
+				$query_args = array(
+					'redirect' => rawurlencode( rawurlencode( $redirect_url ) ),
+					'scopes'   => WOOSQU_PLUS_SCOPES,
+				);
 
-			$disconnect_url = add_query_arg(
-				array(
+				$url = WOOSQU_PLUS_CONNECTURL . '/login/';
+
+
+				$production_connect_url = add_query_arg( $query_args, $url );
+
+				$disconnect_url = array(
 					'page'                 => 'square-settings',
 					'app_name'             => WOOSQU_PLUS_APPNAME,
 					'plug'                 => WOOSQU_PLUS_PLUGIN_NAME,
 					'disconnect_woosquare' => 1,
-				),
-				admin_url( 'admin.php' )
-			);
-			$disconnect_url = wp_nonce_url( $disconnect_url, 'disconnect_woosquare', 'wc_woosquare_token_nonce' );
+				);
 
+				$disconnect_url = add_query_arg(
+					$disconnect_url,
+					admin_url( 'admin.php' )
+				);
 
-			// if user not connected through auth square button.
-			?>
+				$disconnect_url = wp_nonce_url( $disconnect_url, 'disconnect_woosquare', 'wc_woosquare_token_nonce' );
 
-			<div class="squareConnectBlock">
+				?>
 
-
-
-				<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { 
+				<div class="squareConnectBlock">
+ 
+					<?php
+					if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) {
 						if ( ! empty( get_transient( 'is_sandbox' ) ) ) {
-					?>
+							?>
 
 					<div class="center-container">
 						<div class="custom-notification">
@@ -227,76 +229,79 @@
 							</div>
 							<div class="notification-content">
 								<p class="notification-text">
-									Make sure to launch <a target="_blank" class="wpep-highlight" href="https://developer.squareup.com/console/en/sandbox-test-accounts">seller test account</a> from the developer dashboard before connecting your Square Sandbox account.
+									Make sure to launch <a class="wpep-highlight" href="https://developer.squareup.com/console/en/sandbox-test-accounts">seller test account</a> from the developer dashboard before connecting your Square Sandbox account.
 								</p>
 							</div>
 						</div>
 					</div>
 					<?php } ?>
-				<span class="statusTitle">
-					<small class="iconstatus icondis"></small>
-					<?php esc_html_e( 'Connect Now!', 'woosquare' ); ?>
-				</span>
-				<?php } else { ?>
-				<span class="statusTitle">
-					<small class="iconstatus iconcon"></small>
-					<?php esc_html_e( 'Connected!', 'woosquare' ); ?>
-				</span>
-				<?php } ?>
+					<span class="statusTitle">
+						<small class="iconstatus icondis"></small>
+						<?php esc_html_e( 'Connect Now!', 'woocommerce-square' ); ?>
+					</span>
+					<?php } else { ?>
+					<span class="statusTitle">
+						<small class="iconstatus iconcon"></small>
+						<?php esc_html_e( 'Connected!', 'woocommerce-square' ); ?>
+					</span>
+					<?php } ?>
 
+					<!-- <p>Connect through auth square to make system more smooth.</p> -->
+					<?php if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) : ?>
 
-				<!-- <p>Connect through auth square to make system more smooth.</p> -->
-
-
-				<?php if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) : ?>
-
-				<div class="squareConnectBlock2 welcome-panel ext-panel <?php echo esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ?? '' ) ) ); ?>-2">
+						<div class="squareConnectBlock2 welcome-panel ext-panel <?php echo esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ?? '' ) ) ); ?>-2">
 					<div class="squareConnectBlock2Hold">
 						<h4>Select Your Store</h4>
 						<?php if ( $currency_mismatch_flag ) { ?>
 						<br />
-						<div id="woo_square_error" class="error" style="background: #ddd;">				
-							<p style="color: red; font-weight: bold;"><?php esc_html_e( 'The currency code of your Square account [', 'woosquare' ); ?><?php echo esc_html( $square_currency_code ); ?><?php esc_html_e( '] does not match WooCommerce [', 'woosquare' ); ?><?php echo esc_html( $woo_currency_code ); ?><?php esc_html_e( ']', 'woosquare' ); ?></p>
+						<div id="woo_square_error" class="error" style="background: #ddd;">
+							<p style="color: red;font-weight: bold;">The currency code of your Square account [
+							<?php echo esc_html( $square_currency_code ); ?> ] does not match WooCommerce [
+							<?php echo esc_html( $woo_currency_code ); ?> ]
+							</p>
 						</div>
 						<?php } ?>
-
 						<input type="hidden" name="woosquare_setting_nonce" value="<?php echo esc_attr( wp_create_nonce( 'woosquare-setting-nonce' ) ); ?>" />
-						
 						<form class="locationWrap" method="post" <?php if ( $currency_mismatch_flag ) : ?>
-							style="opacity:0.5;pointer-events:none;" <?php endif; ?>>
+							style="opacity:0.5;pointer-events:none;" 
+							<?php
+						endif;
+																	?>
+						>
 							<input type="hidden" value="1" name="woo_square_settings" />
 
 							<div class="locationhold">
-								<?php
-								if ( ! empty( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) && is_array( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) ) {
+						<?php
+						if ( ! empty( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) && is_array( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) ) {
 
 
-									foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
-											$loc[ ( $kk ) ] = $valu;
-									}
-								} else {
-									foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
-										$loc[ key( $valu ) ] = $valu[ key( $valu ) ];
-									}
-								}
+							foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
+								$loc[ ( $kk ) ] = $valu;
+							}
+						} else {
+							foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
+								$loc[ key( $valu ) ] = $valu[ key( $valu ) ];
+							}
+						}
 
-								?>
-								<select name="woo_square_location_id">
-									<option value="">Select Location</option>
-									<?php foreach ( $loc as $key => $location ) { ?>
+						?>
+								<select name="woo_square_location_id<?php echo esc_html( get_transient( 'is_sandbox' ) ); ?>">
+									<option selected="" value="">Select Location</option>
+						<?php foreach ( $loc as $key => $location ) { ?>
 									<option
-										<?php
-										if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) === key( $location ) ) :
-											?>
-											selected
-										<?php endif; ?> value="<?php echo esc_html( key( $location ) ); ?>">
-										<?php
-										$print_r = 'print_r';
-										$print_r( $location[ key( $location ) ] );
-										?>
+							<?php
+							if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) === key( $location ) ) :
+								?>
+											selected=""
+							<?php endif; ?> value="<?php echo esc_html( key( $location ) ); ?>">
+							<?php
+							$print_r = 'print_r';
+							$print_r( $location[ key( $location ) ] );
+							?>
 										</option>
-									<?php } ?>
+						<?php } ?>
 								</select>
+								
 								<span class="submit">
 									<input type="submit" value="Save Changes"
 										class="btn-cus btn waves-effect waves-light btn-rounded btn-primary">
@@ -308,17 +313,17 @@
 					
 								
 					
-					<?php if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) ) { ?>
+						<?php if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) ) { ?>
 						<div class="moduleslink">
 						
 							<a href="<?php echo esc_url( get_admin_url() . 'admin.php?page=' ); ?>woosquare-plus-module" data-toggle="tooltip" data-placement="right" title="" data-original-title="Activate your modules now">Access your Module</a>
 						
 						</div>
-					<?php } ?>
+						<?php } ?>
 				</div>
 				<?php endif; ?>
-				<input type="hidden" class="mode_checker_nonce" name="mode_checker_nonce" value="<?php echo wp_create_nonce('sandbox-mode-checker'); ?>" />
-				<div class="clearfix"></div>
+				<input type="hidden" class="mode_checker_nonce" name="mode_checker_nonce" value="<?php echo esc_attr( wp_create_nonce( 'sandbox-mode-checker' ) ); ?>" />
+<div class="clearfix"></div>
 				<?php if ( ! get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) { ?>
 				<a href="<?php echo esc_attr( $production_connect_url ); ?>"
 					class="m-t-10 waves-effect waves-dark btn btn-primary btn-md btn-rounded">
@@ -328,7 +333,7 @@
 						<path fill="#FFFFFF"
 							d="M17.333 28.003c-.736 0-1.332-.6-1.332-1.339v-9.324c0-.739.596-1.339 1.332-1.339h9.338c.738 0 1.332.6 1.332 1.339v9.324c0 .739-.594 1.339-1.332 1.339h-9.338z" />
 					</svg>
-					<span><?php esc_html_e( 'Connect with Square', 'woosquare' ); ?></span>
+					<span><?php esc_html_e( 'Connect with Square', 'woocommerce-square' ); ?></span>
 				</a>
 				<div class="signupLink">
 					<span>Don't have account? </span> <a href="https://squareup.com/signup" data-placement="bottom"
@@ -388,7 +393,7 @@
 											d="M17.333 28.003c-.736 0-1.332-.6-1.332-1.339v-9.324c0-.739.596-1.339 1.332-1.339h9.338c.738 0 1.332.6 1.332 1.339v9.324c0 .739-.594 1.339-1.332 1.339h-9.338z" />
 									</svg>
 				
-									<span><?php echo esc_html__( 'Disconnect from Square', 'woosquare' ); ?></span>
+									<span><?php echo esc_html__( 'Disconnect from Square', 'woocommerce-square' ); ?></span>
 				
 								</a> -->
 							</div>
@@ -404,87 +409,10 @@
 
 				<?php } ?>
 
-				<!-- <table class="form-table">
-						<tbody>
-							<tr>
-								<th>
-									
-								</th>
-								<td>
-									
-								</td>
-							</tr>
-						</tbody>
-					</table> -->
-			</div>
+				</div>
 
 
-		</form>
-	</div>
-
-	<!-- <?php if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) : ?>
-
-	<div class="squareConnectBlock2 welcome-panel ext-panel <?php echo isset( $query_params['page'] ) ? esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ) ) ) : ''; ?>-2">
-		<h4>WC Shop Sync Settings</h4>
-		<?php if ( $currency_mismatch_flag ) { ?>
-		<br />
-		<div id="woo_square_error" class="error" style="background: #ddd;">
-			<p style="color: red;font-weight: bold;">The currency code of your Square ac<?php echo isset( $query_params['page'] ) ? esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ) ) ) : ''; ?>count [
-				<?php echo esc_html( $square_currency_code ); ?> ] does not match WooCommerce [ <?php echo esc_html( $woo_currency_code ); ?> ]
-			</p>
+			</form>
 		</div>
-		<?php } ?>
-		<form class="locationWrap" method="post" 
-		<?php
-		if ( $currency_mismatch_flag ) :
-			?>
-			style="opacity:0.5;pointer-events:none;"
-			<?php endif; ?>>
-			<input type="hidden" value="1" name="woo_square_settings" />
-
-			<div class="locationhold">
-			<?php
-			if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) !== '' && get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) !== 'me' ) :
-				if ( ! empty( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) && is_array( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) ) {
-					foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
-									$loc[ ( $kk ) ] = $valu;
-					}
-				} else {
-					foreach ( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) as $kk => $valu ) {
-						$loc[ key( $valu ) ] = $valu[ key( $valu ) ];
-					}
-				}
-				?>
-<select name="woo_square_location_id">
-<option selected="" value="">Select Location</option>
-
-
-								<?php foreach ( $loc as $key => $location ) { ?>
-								<option 
-									<?php
-									if ( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) === key( $location ) ) :
-										?>
-									selected=""
-										<?php endif; ?> value="<?php echo esc_attr( key( $location ) ); ?>">
-									<?php
-									$print_r = 'print_r';
-									$print_r( $location[ key( $location ) ] );
-									?>
-									</option>
-								<?php } ?>
-							</select>
-							<?php endif; ?>
-							<span class="submit">
-				<input type="submit" value="Save Changes" class="btn-cus btn waves-effect waves-light btn-rounded btn-info">
-			</span>
-			</div>
-
-			
-			
-		</form>
 	</div>
-
-<?php endif; ?> -->
-
-</div>
-</div>
+	</div>

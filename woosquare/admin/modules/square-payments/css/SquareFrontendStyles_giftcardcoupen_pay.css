@@ -12,7 +12,12 @@
      color: red;
     font-weight: 500;
 }
-
+div#woosquare_giftcard_div {
+    padding: 15px;
+}
+div#woosquare_giftcard_div {
+    margin: 15px;
+}
 .squareboxvisible{
   display: none;
 }

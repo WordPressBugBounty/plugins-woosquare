@@ -20,13 +20,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class WooSquare_Install {
 
+
+
 	/**
 	 * Intialize
 	 *
-	 * @access public
+	 * @access  public
 	 * @version 1.0.0
-	 * @since 1.0.0
-	 * @return bool
+	 * @since   1.0.0
+	 * @return  bool
 	 */
 	public static function init() {
 
@@ -37,14 +39,14 @@ class WooSquare_Install {
 	/**
 	 * Checks the plugin version
 	 *
-	 * @access public
-	 * @since 1.0.0
+	 * @access  public
+	 * @since   1.0.0
 	 * @version 1.0.0
-	 * @return bool
+	 * @return  bool
 	 */
 	public static function check_version() {
 
-		if ( ! defined( 'IFRAME_REQUEST' ) && ( get_option( 'WooSquare_version' ) !== WOOSQUARE_VERSION ) ) {
+		if ( ! defined( 'IFRAME_REQUEST' ) && ( get_option( 'WOOSQUARE_VERSION' ) !== WOOSQUARE_VERSION ) ) {
 			self::install();
 			do_action( 'woosquare_updated' );
 		}
@@ -55,10 +57,10 @@ class WooSquare_Install {
 	/**
 	 * Do installs.
 	 *
-	 * @access public
-	 * @since 1.0.0
+	 * @access  public
+	 * @since   1.0.0
 	 * @version 1.0.0
-	 * @return bool
+	 * @return  bool
 	 */
 	public static function install() {
 		self::update_plugin_version();
@@ -69,14 +71,14 @@ class WooSquare_Install {
 	/**
 	 * Updates the plugin version in db
 	 *
-	 * @access public
-	 * @since 1.0.0
+	 * @access  public
+	 * @since   1.0.0
 	 * @version 1.0.0
-	 * @return bool
+	 * @return  bool
 	 */
 	private static function update_plugin_version() {
-		delete_option( 'WooSquare_version' );
-		add_option( 'WooSquare_version', WOOSQUARE_VERSION );
+		delete_option( 'WOOSQUARE_VERSION' );
+		add_option( 'WOOSQUARE_VERSION', WOOSQUARE_VERSION );
 
 		return true;
 	}

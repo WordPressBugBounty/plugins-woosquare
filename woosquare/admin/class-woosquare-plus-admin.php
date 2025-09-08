@@ -43,8 +43,8 @@ class Woosquare_Plus_Admin {
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.0
-	 * @param string $plugin_name The name of this plugin.
-	 * @param string $version The version of this plugin.
+	 * @param      string $plugin_name       The name of this plugin.
+	 * @param      string $version    The version of this plugin.
 	 */
 	public function __construct( $plugin_name, $version ) {
 
@@ -134,21 +134,22 @@ class Woosquare_Plus_Admin {
 
 		$plugin_modules = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );
 
-		add_menu_page( 'WC Shop Sync Settings', 'WC Shop Sync Settings', 'manage_options', 'square-settings', array( &$this, 'square_auth_page' ), plugin_dir_url( __FILE__ ) . '/img/square.png' );
+		add_menu_page( 'Woo Square Settings', WOOSQU_PLUS_LABEL, 'manage_options', 'square-settings', array( &$this, 'square_auth_page' ), plugin_dir_url( __FILE__ ) . 'img/square.png' );
 		$this->check_for_auth();
-		
 		if ( ! empty( $plugin_modules['module_page'] ) ) {
+
 			foreach ( $plugin_modules as $key => $value ) {
 				if ( $value['module_activate'] ) {
 
 					if ( ! empty( get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) && ! empty( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) ) ) {
 						if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true ) ) {
 							$active_option = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
+
 							if ( $active_option['module_page'] ) {
 								do_action( 'delete_option', $active_option['module_page'] );
 							}
-						} elseif ( empty( $value['is_premium'] ) ) {
-								add_submenu_page( $value['module_menu_details']['parent_slug'], $value['module_menu_details']['page_title'], $value['module_menu_details']['menu_title'], $value['module_menu_details']['capability'], $value['module_menu_details']['menu_slug'], array( &$this, $value['module_menu_details']['function_callback'] ) );
+						} else {
+							add_submenu_page( $value['module_menu_details']['parent_slug'], $value['module_menu_details']['page_title'], $value['module_menu_details']['menu_title'], $value['module_menu_details']['capability'], $value['module_menu_details']['menu_slug'], array( &$this, $value['module_menu_details']['function_callback'] ) );
 						}
 					}
 				}
@@ -156,7 +157,6 @@ class Woosquare_Plus_Admin {
 			add_submenu_page( 'square-settings', 'Documentation Plus', 'Documentation', 'manage_options', 'square-documentation', array( &$this, 'documentation_plugin_page' ) );
 		}
 	}
-
 
 	/**
 	 * Check if the user is authenticated.
@@ -167,13 +167,14 @@ class Woosquare_Plus_Admin {
 	public function check_for_auth() {
 
 		if (
-				! empty( $_REQUEST['access_token'] ) &&
-				! empty( $_REQUEST['token_type'] ) &&
-				sanitize_text_field( wp_unslash( $_REQUEST['token_type'] ) ) === 'bearer'
+			! empty( $_REQUEST['access_token'] ) &&
+			! empty( $_REQUEST['token_type'] ) &&
+			sanitize_text_field( wp_unslash( $_REQUEST['token_type'] ) ) === 'bearer'
 		) {
 
-			if ( ! isset( $_GET['wc_woosquare_token_nonce'] ) || function_exists( 'wp_verify_nonce' ) &&
-				! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['wc_woosquare_token_nonce'] ) ), 'connect_woosquare' )
+			if ( ! isset( $_GET['wc_woosquare_token_nonce'] ) ||
+				( function_exists( 'wp_verify_nonce' ) &&
+				! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['wc_woosquare_token_nonce'] ) ), 'connect_woosquare' ) )
 			) {
 				wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 			}
@@ -188,6 +189,9 @@ class Woosquare_Plus_Admin {
 				update_option( 'woo_square_refresh_token' . get_transient( 'is_sandbox' ), sanitize_text_field( wp_unslash( $_REQUEST['refresh_token'] ) ) );
 			}
 			update_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ), sanitize_text_field( wp_unslash( $_REQUEST['access_token'] ) ) );
+			update_option( 'woo_square_update_msg_dissmiss' . get_transient( 'is_sandbox' ), 'connected' );
+			delete_option( 'woo_square_auth_notice' . get_transient( 'is_sandbox' ) );
+
 			$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 
 			$results = $square->get_all_locations();
@@ -199,12 +203,14 @@ class Woosquare_Plus_Admin {
 						$caps = ' | ' . implode( ',', $locations['capabilities'] ) . ' ENABLED';
 					}
 					$location_id = ( $locations['id'] );
-					$str[]       = array(
-						$location_id => $locations['name'] . ' ' . str_replace( '_', ' ', $caps ),
-					);
+					if ( 'ACTIVE' === $locations['status'] ) {
+						$str[] = array(
+							$location_id => $locations['name'] . ' ' . str_replace( '_', ' ', $caps ),
+						);
+					}
 				}
 				update_option( 'woo_square_locations' . get_transient( 'is_sandbox' ), $str );
-				update_option( 'woo_square_business_name', $locations['name'] );
+				update_option( 'woo_square_business_name' . get_transient( 'is_sandbox' ), $locations['name'] );
 				if ( count( $results['locations'] ) === 1 ) {
 					update_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ), $location_id );
 
@@ -226,7 +232,10 @@ class Woosquare_Plus_Admin {
 				! empty( $_REQUEST['disconnect_woosquare'] ) &&
 				! empty( $_REQUEST['wc_woosquare_token_nonce'] )
 		) {
-			if ( ! isset( $_REQUEST['wc_woosquare_token_nonce'] ) || function_exists( 'wp_verify_nonce' ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['wc_woosquare_token_nonce'] ) ), 'disconnect_woosquare' ) ) {
+			if ( ! isset( $_REQUEST['wc_woosquare_token_nonce'] ) ||
+				( function_exists( 'wp_verify_nonce' ) &&
+				! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['wc_woosquare_token_nonce'] ) ), 'disconnect_woosquare' ) )
+			) {
 				wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woocommerce-square' ) ) );
 			}
 
@@ -248,7 +257,7 @@ class Woosquare_Plus_Admin {
 			);
 
 			$redirect_url = wp_nonce_url( $redirect_url, 'connect_wcsrs', 'wc_wcsrs_token_nonce' );
-			$site_url     = rawurlencode( $redirect_url );
+			$site_url     = ( rawurlencode( $redirect_url ) );
 			$args_renew   = array(
 				'body'      => array(
 					'header'   => $headers,
@@ -280,6 +289,77 @@ class Woosquare_Plus_Admin {
 			exit;
 		}
 	}
+	/**
+	 * Creates the logs table for WooCommerce Square sync if it doesn't exist.
+	 *
+	 * This function checks if the table for storing sync logs exists in the database.
+	 * If not, it creates the table with necessary columns such as log_time, status, message,
+	 * sync_direction, item, environment, and data. The table is created with the proper character
+	 * set and collation for the WordPress database.
+	 *
+	 * @return void
+	 */
+	public function wcsyn_create_logs_db() {
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		global $wpdb;
+		$sync_logs_table = $wpdb->prefix . WOO_SQUARE_ITEM_SYNC_LOGS_TABLE;
+		$get_var         = 'get_var';
+		if ( $wpdb->$get_var( "SHOW TABLES LIKE '$sync_logs_table'" ) !== $sync_logs_table ) {
+			if ( ! empty( $wpdb->charset ) ) {
+				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
+			}
+			if ( ! empty( $wpdb->collate ) ) {
+				$charset_collate .= " COLLATE $wpdb->collate";
+			}
+
+			$sql = "CREATE TABLE IF NOT EXISTS $sync_logs_table (
+				id INT(11) NOT NULL AUTO_INCREMENT,
+				log_time DATETIME NOT NULL,
+				status TEXT NOT NULL,
+				message TEXT NOT NULL,
+				sync_direction TEXT NOT NULL,
+				item TEXT NOT NULL,
+				enviroment TEXT NOT NULL,
+				data TEXT NOT NULL,
+				PRIMARY KEY (id)
+			) $charset_collate;";
+
+			dbDelta( $sql );
+		}
+	}
+
+	/**
+	 * Checks if the WooCommerce Square integration table exists and creates it if not.
+	 *
+	 * @return void
+	 */
+	public function wcsyn_create_integration_db() {
+		// create tables.
+		require_once ABSPATH . '/wp-admin/includes/upgrade.php';
+		global $wpdb;
+
+		// deleted products table.
+		$del_prod_table = $wpdb->prefix . WOO_SQUARE_TABLE_DELETED_DATA;
+		$get_var        = 'get_var';
+		if ( $wpdb->$get_var( "SHOW TABLES LIKE '$del_prod_table'" ) !== $del_prod_table ) {
+
+			if ( ! empty( $wpdb->charset ) ) {
+				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
+			}
+			if ( ! empty( $wpdb->collate ) ) {
+				$charset_collate .= " COLLATE $wpdb->collate";
+			}
+
+			$sql = 'CREATE TABLE ' . $del_prod_table . " (
+				`square_id` varchar(50) NOT NULL,
+							`target_id` bigint(20) NOT NULL,
+							`target_type` tinyint(2) NULL,
+							`name` varchar(255) NULL,
+				PRIMARY KEY (`square_id`)
+			) $charset_collate;";
+			dbDelta( $sql );
+		}
+	}
 
 	/**
 	 * Perform an action in the English plugin.
@@ -293,8 +373,9 @@ class Woosquare_Plus_Admin {
 	public function en_plugin_act() {
 
 		$plugin_modules = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );
-		if ( ! isset( $_POST['nonce'] ) || function_exists( 'wp_verify_nonce' ) &&
-			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'my_woosquare_ajax_nonce' )
+		if ( ! isset( $_POST['nonce'] ) ||
+			( function_exists( 'wp_verify_nonce' ) &&
+			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'my_woosquare_ajax_nonce' ) )
 		) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
@@ -309,7 +390,6 @@ class Woosquare_Plus_Admin {
 				$plugin_modules[ $plugin_id ]['module_activate'] = false;
 				update_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), $plugin_modules );
 			}
-
 			// below condition for when payment gateway disabled sandbox condition also disabled so it will not conflicts with other features..
 			if ( 'woosquare_payment' === $plugin_id ) {
 				$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
@@ -319,13 +399,6 @@ class Woosquare_Plus_Admin {
 
 				update_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_plus_settings );
 			}
-			if ( 'items_sync' === $plugin_id ) {
-				if ( isset( $plugin_modules['items_sync_log']['module_activate'] ) && true === $plugin_modules['items_sync_log']['module_activate'] ) {
-					$plugin_id = str_replace( 'myonoffswitch_', '', sanitize_text_field( wp_unslash( $_POST['pluginid'] ) ) );
-					$plugin_modules['items_sync_log']['module_activate'] = false;
-					update_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), $plugin_modules );
-				}
-			}
 			$msg = wp_json_encode(
 				array(
 					'status' => true,
@@ -334,11 +407,11 @@ class Woosquare_Plus_Admin {
 			);
 
 		} elseif (
-				! empty( $_POST['action'] ) && ! empty( $_POST['status'] )
-				&& 'en_plugin' === sanitize_text_field( wp_unslash( $_POST['action'] ) )
-				&& ! empty( $plugin_modules )
-				&& 'disab' === sanitize_text_field( wp_unslash( $_POST['status'] ) )
-			) {
+			! empty( $_POST['action'] ) && ! empty( $_POST['status'] )
+			&& 'en_plugin' === sanitize_text_field( wp_unslash( $_POST['action'] ) )
+			&& ! empty( $plugin_modules )
+			&& 'disab' === sanitize_text_field( wp_unslash( $_POST['status'] ) )
+		) {
 
 			if ( isset( $_POST['pluginid'] ) && sanitize_text_field( wp_unslash( $_POST['pluginid'] ) ) ) {
 				$plugin_id                                       = str_replace( 'myonoffswitch_', '', sanitize_text_field( wp_unslash( $_POST['pluginid'] ) ) );
@@ -351,22 +424,8 @@ class Woosquare_Plus_Admin {
 					'msg'    => 'Addon Successfully Enabled!',
 				)
 			);
-			if ( 'items_sync_log' === $plugin_id ) {
-				if ( isset( $plugin_modules['items_sync']['module_activate'] ) && true !== $plugin_modules['items_sync']['module_activate'] ) {
-					$plugin_id                                       = str_replace( 'myonoffswitch_', '', sanitize_text_field( wp_unslash( $_POST['pluginid'] ) ) );
-					$plugin_modules[ $plugin_id ]['module_activate'] = false;
-					update_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), $plugin_modules );
 
-					$msg = wp_json_encode(
-						array(
-							'status' => false,
-							'msg'    => __( 'To use "Logs of Sync Products" module "Synchronization of Products" module must be enabled first!', 'woosquare' ),
-						)
-					);
-				}
-			}
 		}
-
 		echo wp_kses_post( $msg );
 		set_transient( 'woosquare_plus_notification', $msg, 12 * HOUR_IN_SECONDS );
 		die();
@@ -388,34 +447,10 @@ class Woosquare_Plus_Admin {
 		} else {
 			$ss = 'error';
 		}
-		$class        = 'notice notice-' . $ss;
-		$message      = ( $woosquare_plus_notification->msg );
-		$allowed_html = array(
-			'a'      => array(
-				'a'     => true,
-				'href'  => true,
-				'class' => true,
-			),
-			'strong' => array(),
-		);
-		printf( '<div class="notice notice-%1$s"><p>%2$s</p></div>', esc_html( $ss ), wp_kses( $message, $allowed_html ) );
-
-		$woo_square_auth_response = get_option( 'woo_square_auth_response' . get_transient( 'is_sandbox' ) );
-		if ( is_object( $woo_square_auth_response ) ) {
-			$woo_square_auth_response = (array) $woo_square_auth_response;
-		}
-
-		if ( isset( $woo_square_auth_response['expires_at'] ) && ( ( strtotime( $woo_square_auth_response['expires_at'] ) + 6000 ) <= time() ) ) {
-			// delete oauth account to avoid refresh request.
-			delete_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
-			delete_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
-			delete_option( 'woo_square_location_id_free' . get_transient( 'is_sandbox' ) );
-			delete_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) );
-			delete_option( 'woo_square_locations_free' . get_transient( 'is_sandbox' ) );
-			delete_option( 'woo_square_business_name_free' . get_transient( 'is_sandbox' ) );
-		} else {
-			delete_transient( 'woosquare_plus_notification' );
-		}
+		$class   = 'notice notice-' . $ss;
+		$message = ( $woosquare_plus_notification->msg );
+		printf( '<div class="%1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $message ) );
+		delete_transient( 'woosquare_plus_notification' );
 	}
 
 	/**
@@ -427,15 +462,14 @@ class Woosquare_Plus_Admin {
 	 * processing is necessary.
 	 */
 	public function woosquare_plus_payment_order_check() {
-		 
 		$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 		$activate_modules_woosquare_plus  = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );
 
 		if (
-				empty( get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) || empty( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) )
+			empty( get_option( 'woo_square_access_token_cauth' . get_transient( 'is_sandbox' ) ) ) || empty( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) )
 		) {
 			if (
-				isset( $_POST['woo_square_settings'] ) && 1 !== sanitize_text_field( wp_unslash( $_POST['woo_square_settings'] ) )
+				isset( $_POST['woo_square_settings'] ) && 1 !== sanitize_text_field( wp_unslash( $_POST['woo_square_settings'] ) ) // phpcs:ignore
 			) {
 				$class       = 'notice notice-error';
 				$connectlink = get_admin_url() . 'admin.php?page=square-settings';
@@ -451,25 +485,27 @@ class Woosquare_Plus_Admin {
 	 * Settings page action
 	 */
 	public function square_auth_page() {
-
 		if ( isset( $_POST['woosquare_setting_nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woosquare_setting_nonce'] ) ), 'woosquare-setting-nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
-		$this->check_or_add_plugin_tables();
 		$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 
 		$error_message   = '';
 		$success_message = '';
 
 		// check if the location is not setuped.
-		if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) && ! get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) ) {
-			$square->authorize();
+		if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
+			if ( ! empty( get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ) ) ) {
+				$square->get_currency_code();
+			}
+			if ( empty( get_option( 'woo_square_locations' . get_transient( 'is_sandbox' ) ) ) ) {
+				$square->authorize();
+			}
 		}
-		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) {
 
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) {
 			// setup account.
 			if ( isset( $_POST[ 'woo_square_access_token' . get_transient( 'is_sandbox' ) ] ) ) {
-
 				$woo_square_access_token = sanitize_text_field( wp_unslash( $_POST[ 'woo_square_access_token' . get_transient( 'is_sandbox' ) ] ) );
 				$woo_square_app_id       = ( isset( $_POST['woo_square_app_id'] ) ? sanitize_text_field( wp_unslash( $_POST['woo_square_app_id'] ) ) : '' );
 				$square->set_access_token( $woo_square_access_token );
@@ -485,11 +521,9 @@ class Woosquare_Plus_Admin {
 			if ( isset( $_POST['woo_square_settings'] ) ) {
 				// update location id.
 				if ( ! empty( $_POST[ 'woo_square_location_id' . get_transient( 'is_sandbox' ) ] ) ) {
-
 					$location_id       = sanitize_text_field( wp_unslash( $_POST[ 'woo_square_location_id' . get_transient( 'is_sandbox' ) ] ) );
 					$woo_square_app_id = defined( 'WOOSQU_PLUS_APPID' ) ? sanitize_text_field( WOOSQU_PLUS_APPID ) : '';
 					update_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ), $location_id );
-					$square->set_location_id( $location_id );
 
 				}
 				$success_message = 'Settings updated successfully!';
@@ -499,12 +533,11 @@ class Woosquare_Plus_Admin {
 		$square_currency_code = get_option( 'woo_square_account_currency_code' );
 
 		if ( ! $square_currency_code ) {
-			$square->get_currency_code();
 			$square->getapp_id();
 			$square_currency_code = get_option( 'woo_square_account_currency_code' );
 		}
-
-		$currency_mismatch_flag = ( $woo_currency_code !== $square_currency_code );
+		if ( $currency_mismatch_flag = ( $woo_currency_code != $square_currency_code ) ) { // phpcs:ignore
+		}
 
 		include WOO_SQUARE_PLUS_PLUGIN_PATH . 'admin/partials/settings.php';
 	}
@@ -513,7 +546,7 @@ class Woosquare_Plus_Admin {
 	 * Documentation_plugin_page
 	 */
 	public function documentation_plugin_page() {
-		header( 'Location: https://apiexperts.io/documentation/apiexperts-square-for-woocommerce/' );
+		header( 'Location: https://apiexperts.io/woosquare-plus-documentation/?utm_source=WordPress&utm_medium=PluginSale&utm_campaign=InStore' );
 		wp_die();
 	}
 
@@ -530,65 +563,6 @@ class Woosquare_Plus_Admin {
 		wp_enqueue_style( 'bootstrap', 'https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css', array(), '4.4.1' );
 		include WOO_SQUARE_PLUS_PLUGIN_PATH . 'admin/partials/module-views.php';
 	}
-	/**
-	 * Check_or_add_plugin_tables
-	 */
-	public function check_or_add_plugin_tables() {
-		// create tables.
-		require_once ABSPATH . '/wp-admin/includes/upgrade.php';
-		global $wpdb;
-		$get_var = 'get_var';
-		// deleted products table.
-		$del_prod_table = $wpdb->prefix . WOO_SQUARE_TABLE_DELETED_DATA;
-		if ( $wpdb->$get_var( "SHOW TABLES LIKE '$del_prod_table'" ) !== $del_prod_table ) {
-
-			if ( ! empty( $wpdb->charset ) ) {
-				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-			}
-			if ( ! empty( $wpdb->collate ) ) {
-				$charset_collate .= " COLLATE $wpdb->collate";
-			}
-
-			$sql = 'CREATE TABLE ' . $del_prod_table . " (
-				`square_id` varchar(50) NOT NULL,
-							`target_id` bigint(20) NOT NULL,
-							`target_type` tinyint(2) NULL,
-							`name` varchar(255) NULL,
-				PRIMARY KEY (`square_id`)
-			) $charset_collate;";
-			dbDelta( $sql );
-		}
-
-		// logs table.
-		$sync_logs_table = $wpdb->prefix . WOO_SQUARE_TABLE_SYNC_LOGS;
-
-		if ( $wpdb->$get_var( "SHOW TABLES LIKE '$sync_logs_table'" ) !== $sync_logs_table ) {
-
-			if ( ! empty( $wpdb->charset ) ) {
-				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-			}
-			if ( ! empty( $wpdb->collate ) ) {
-				$charset_collate .= " COLLATE $wpdb->collate";
-			}
-
-			$sql = 'CREATE TABLE ' . $sync_logs_table . " (
-						`id` bigint(20) auto_increment NOT NULL,
-						`target_id` bigint(20) NULL,
-						`target_type` tinyint(2) NULL,
-						`target_status` tinyint(1) NULL,
-						`parent_id` bigint(20) NOT NULL default '0',
-						`square_id` varchar(50) NULL,
-						`action`  tinyint(3) NOT NULL,
-						`date` TIMESTAMP NOT NULL,
-						`sync_type` tinyint(1) NULL,
-						`sync_direction` tinyint(1) NULL,
-						`name` varchar(255) NULL,
-						`message` text NULL,
-						PRIMARY KEY (`id`)
-				) $charset_collate;";
-			dbDelta( $sql );
-		}
-	}
 
 	/**
 	 * Callback Functions
@@ -597,10 +571,20 @@ class Woosquare_Plus_Admin {
 		if ( function_exists( 'woo_square_script' ) ) {
 			woo_square_script();
 		}
-
 		if ( function_exists( 'square_settings_page' ) ) {
 			square_settings_page();
 		}
+	}
+
+	/**
+	 * Callback Functions
+	 */
+	public function square_payment_sync_page() {
+		if ( function_exists( 'woo_square_script' ) ) {
+			woo_square_script();
+		}
+
+		$this->square_payment_plugin_page();
 	}
 
 	/**
@@ -611,17 +595,6 @@ class Woosquare_Plus_Admin {
 			woo_square_script();
 		}
 		$this->square_sync_log_plugin_page();
-	}
-
-	/**
-	 * Callback Functions
-	 */
-	public function square_payment_sync_page() {
-
-		if ( function_exists( 'woo_square_script' ) ) {
-			woo_square_script();
-		}
-		$this->square_payment_plugin_page();
 	}
 
 	/**
@@ -643,50 +616,151 @@ class Woosquare_Plus_Admin {
 	 * @global type $wpdb
 	 */
 	public function square_payment_plugin_page() {
-		$square_payment_settin             = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
-		$square_payment_setting_google_pay = get_option( 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		$square_payment_settin = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 
-		if ( ! empty( $square_payment_setting_google_pay ) && 'yes' === $square_payment_setting_google_pay['enabled'] ) {
-			$square_payment_setting_google_pay['enabled'] = 'yes';
-		} else {
-			$square_payment_setting_google_pay            = array();
-			$square_payment_setting_google_pay['enabled'] = 'no';
-		}
-
-		$woocommerce_square_apple_pay_enabled = get_option( 'woocommerce_square_apple_pay' . get_transient( 'is_sandbox' ) . '_settings' );
-		if ( ! empty( $woocommerce_square_apple_pay_enabled ) && 'yes' === $woocommerce_square_apple_pay_enabled['enabled'] ) {
-			$woocommerce_square_apple_pay_enabled['enabled'] = 'yes';
-		} else {
-			$woocommerce_square_apple_pay_enabled            = array();
-			$woocommerce_square_apple_pay_enabled['enabled'] = 'no';
-		}
-
-		$woocommerce_square_ach_payment_settings = get_option( 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_settings' );
-		if ( ! empty( $woocommerce_square_ach_payment_settings ) && 'yes' === $woocommerce_square_ach_payment_settings['enabled'] ) {
-			$woocommerce_square_ach_payment_settings['enabled'] = 'yes';
-		} else {
-			$woocommerce_square_ach_payment_settings            = array();
-			$woocommerce_square_ach_payment_settings['enabled'] = 'no';
-		}
-
+		$square_payment_setting_google_pay        = get_option( 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		$woocommerce_square_gift_card_pay_enabled = get_option( 'woocommerce_square_gift_card_pay_enabled' . get_transient( 'is_sandbox' ) );
+		$woocommerce_square_after_pay_settings    = get_option( 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_settings' );
 		$woocommerce_square_cash_app_pay_settings = get_option( 'woocommerce_square_cash_app_pay' . get_transient( 'is_sandbox' ) . '_settings' );
-		if ( ! empty( $woocommerce_square_cash_app_pay_settings ) && 'yes' === $woocommerce_square_cash_app_pay_settings['enabled'] ) {
-			$woocommerce_square_cash_app_pay_settings['enabled'] = 'yes';
-		} else {
-			$woocommerce_square_cash_app_pay_settings            = array();
-			$woocommerce_square_cash_app_pay_settings['enabled'] = 'no';
+		$woocommerce_square_ach_payment_settings  = get_option( 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_settings' );
+		$woocommerce_square_apple_pay_enabled     = get_option( 'woocommerce_square_apple_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		$woocommerce_square_terminal_pay          = get_option( 'woocommerce_square_terminal_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		$woocommerce_square_payment_reporting     = get_option( 'woocommerce_square_payment_reporting' );
+
+		include plugin_dir_path( __FILE__ ) . 'modules/square-payments/views/payment-settings.php';
+	}
+
+	/**
+	 * Handles the Square Order Sync page.
+	 *
+	 * This function enqueues the necessary styles and scripts, processes form submissions to update settings,
+	 * and includes the view for the order sync settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function square_order_sync_page() {
+		$this->enqueue_styles();
+		$this->enqueue_scripts();
+		define( 'SQUARE_ORDER_SYNC_PLUGIN_URL', plugin_dir_path( __FILE__ ) . 'modules/order-sync' );
+		$error_message   = '';
+		$success_message = '';
+
+		if ( isset( $_POST['woosquare_order_sync_setting_nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woosquare_order_sync_setting_nonce'] ) ), 'woosquare-order-sync-setting-nonce' ) ) {
+			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+		}
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+
+			// save settings.
+			if ( isset( $_POST['squ_woo_order_sync'] ) ) {
+
+				update_option( 'squ_woo_order_sync', sanitize_text_field( wp_unslash( $_POST['squ_woo_order_sync'] ) ) );
+			}
+			if ( isset( $_POST['sync_square_order_notify'] ) ) {
+				update_option( 'sync_square_order_notify', sanitize_text_field( wp_unslash( $_POST['sync_square_order_notify'] ) ) );
+			}
+			if ( isset( $_POST['woo_square_order_pickup_at'] ) ) {
+				update_option( 'woo_square_order_pickup_at', sanitize_text_field( wp_unslash( $_POST['woo_square_order_pickup_at'] ) ) );
+			}
+
+			if ( isset( $_POST['squ_woo_order_sync'] ) ) {
+
+				if ( isset( $_POST['woocommerce_square_application_id'] ) ) {
+					update_option( 'woo_square_application_id_for_callback', sanitize_text_field( wp_unslash( $_POST['woocommerce_square_application_id'] ) ) );
+				}
+				if ( isset( $_POST['woocommerce_square_access_token'] ) ) {
+					update_option( 'woo_square_access_token_for_callback', sanitize_text_field( wp_unslash( $_POST['woocommerce_square_access_token'] ) ) );
+				}
+				if ( isset( $_POST['woocommerce_square_location_id'] ) ) {
+					update_option( 'woo_square_location_id_for_callback', sanitize_text_field( wp_unslash( $_POST['woocommerce_square_location_id'] ) ) );
+				}
+				$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
+				$square->setup_webhook( 'PAYMENT_UPDATED', sanitize_text_field( wp_unslash( $_POST['woocommerce_square_access_token'] ) ), sanitize_text_field( wp_unslash( $_POST['woocommerce_square_location_id'] ) ) );
+			}
 		}
 
-		$woocommerce_square_after_pay_settings = get_option( 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_settings' );
-		if ( ! empty( $woocommerce_square_after_pay_settings ) && 'yes' === $woocommerce_square_after_pay_settings['enabled'] ) {
-			$woocommerce_square_after_pay_settings['enabled'] = 'yes';
-		} else {
-			$woocommerce_square_after_pay_settings            = array();
-			$woocommerce_square_after_pay_settings['enabled'] = 'no';
+		include SQUARE_ORDER_SYNC_PLUGIN_URL . '/view/order-sync-settings.php';
+	}
+
+	/**
+	 * Handles the Square Customer Sync page.
+	 *
+	 * This function defines the plugin URL, enqueues the necessary scripts,
+	 * and calls the function to handle customer sync settings.
+	 *
+	 * @since 1.0.0
+	 */
+	public function square_customer_sync_page() {
+		define( 'SQUARE_CUSTOMER_SYNC_PLUGIN_URL', plugin_dir_url( __FILE__ ) . 'modules/square-customers' );
+		wp_enqueue_script( 'woo_square_customer_script', SQUARE_CUSTOMER_SYNC_PLUGIN_URL . '/admin/js/customer-sync-integration-admin.js', array( 'jquery' ), WOOSQUARE_VERSION, true );
+		square_customer_sync_settings();
+	}
+
+	/**
+	 * Handles the Square Card Sync page.
+	 *
+	 * This function defines the plugin URL, processes form submissions to update settings,
+	 * and includes the view for the card sync settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function square_card_sync_page() {
+		define( 'SQUARE_CUSTOMER_SYNC_PLUGIN_URL', plugin_dir_path( __FILE__ ) . 'modules/square-customers' );
+		$error_message   = '';
+		$success_message = '';
+		if ( isset( $_POST['woosquare_customer_setting_nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woosquare_customer_setting_nonce'] ) ), 'woosquare-customer-setting-nonce' ) ) {
+			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+		}
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+			// save settings.
+			if ( isset( $_POST['woo_square_card_settings'] ) ) {
+				if ( isset( $_POST['cust_add_myaccount'] ) ) {
+					update_option( 'cust_add_myaccount', sanitize_text_field( wp_unslash( $_POST['cust_add_myaccount'] ) ) );
+					$success_message = 'Settings updated successfully!';
+				} else {
+					$error_message = 'Missing required field.';
+				}
+			}
+		}
+		include SQUARE_CUSTOMER_SYNC_PLUGIN_URL . '/admin/partials/card-on-file-settings.php';
+	}
+
+	/**
+	 * Handles the Square Transaction Sync page.
+	 *
+	 * This function includes the necessary file, processes form submissions to update settings,
+	 * and generates the content for the transaction sync settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function square_transaction_sync_page() {
+		require_once plugin_dir_path( __FILE__ ) . '../admin/modules/transaction-notes/transaction-notes.php';
+		$error_message   = '';
+		$success_message = '';
+		if ( isset( $_POST['woosquare_transaction_setting_nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woosquare_transaction_setting_nonce'] ) ), 'woosquare-transaction-setting-nonce' ) ) {
+			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+		}
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+			// save settings.
+			if ( isset( $_POST['selected_order_info'] ) ) {
+				update_option( 'selected_order_info', sanitize_text_field( wp_unslash( $_POST['selected_order_info'] ) ) );
+				$success_message = 'Settings updated successfully!';
+			}
 		}
 
-		$woocommerce_square_payment_reporting = get_option( 'woocommerce_square_payment_reporting' );
+		$countries = new WC_Countries();
+		$billing   = $countries->get_address_fields( $countries->get_base_country(), 'billing_' );
+		$keywords  = null;
+		if ( ! empty( $billing ) && is_array( $billing ) ) {
+			$keywords .= '{order_id} ';
+			foreach ( $billing as $keys => $values ) {
+				$keywords .= '{' . $keys . '} ';
+			}
+		}
+		$selected_order_info = get_option( 'selected_order_info' );
+		if ( $success_message ) {
+			echo '<br/><div class="updated"><p>' . esc_html( $success_message ) . '</p></div>';
+		}
 
-			include plugin_dir_path( __FILE__ ) . 'modules/square-payments/views/payment-settings.php';
+		echo _get_transaction_note( $selected_order_info, $keywords ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 }

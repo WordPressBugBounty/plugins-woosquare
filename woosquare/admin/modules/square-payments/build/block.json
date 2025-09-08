@@ -1,0 +1,31 @@
+{
+  "apiVersion": 2,
+  "name": "woocommerce/woosquare-giftcard-block",
+  "version": "1.0.0",
+  "title": "Woosquare GiftCard",
+  "category": "media",
+  "description": "Adds a select field to let the shopper choose alternative shipping instructions.",
+  "supports": {
+    "html": false,
+    "align": false,
+    "multiple": false,
+    "reusable": false
+  },
+  "parent": [
+    "woocommerce/cart-order-summary-block"
+  ],
+  "attributes": {
+    "lock": {
+      "type": "object",
+      "default": {
+        "remove": true,
+        "move": false
+      }
+    },
+    "text": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "textdomain": "woosquare-giftcard"
+}

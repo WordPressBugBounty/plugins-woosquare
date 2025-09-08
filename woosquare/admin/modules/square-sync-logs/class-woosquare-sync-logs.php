@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class WooSquare_Sync_Logs {
 
+
 	/**
 	 * Constructor for the Square Product sync logs.
 	 */
@@ -31,8 +32,6 @@ class WooSquare_Sync_Logs {
 
 	/**
 	 * Sync logs scripts function.
-	 *
-	 * @access public
 	 */
 	public function sync_log_scripts() {
 		wp_register_script( 'square-sync-log', WOOSQUARE_PLUGIN_URL_LOG . '/js/SquareLogs.js?rand=' . wp_rand(), array( 'jquery' ), WOOSQUARE_VERSION, true );
@@ -55,9 +54,9 @@ class WooSquare_Sync_Logs {
 	 *
 	 * @uses $wpdb WordPress database abstraction object.
 	 *
-	 * @param array  $data An array of data about the deleted items, including product/category IDs and deletion messages.
-	 * @param int    $log_id Optional. The ID of an existing log entry to update. If not provided, a new log entry will be created.
-	 * @param string $item The type of item being deleted (e.g., 'product', 'category').
+	 * @param array  $data      An array of data about the deleted items, including product/category IDs and deletion messages.
+	 * @param int    $log_id    Optional. The ID of an existing log entry to update. If not provided, a new log entry will be created.
+	 * @param string $item      The type of item being deleted (e.g., 'product', 'category').
 	 * @param string $direction The direction of the sync ('woo_to_square' or 'square_to_woo').
 	 *
 	 * @return int|void The ID of the created or updated log entry, or void if an existing log entry was updated.
@@ -68,10 +67,10 @@ class WooSquare_Sync_Logs {
 		if ( ! empty( $data ) ) {
 			$delete_pro = array();
 			if ( ! empty( $data ) ) {
-				foreach ( $data as $kkkeyy => $sync_pro ) {
+				foreach ( $data as $data_key => $sync_pro ) {
 
 					if ( 'delete' === key( $sync_pro ) ) {
-						$delete_pro[ $kkkeyy ] = $sync_pro[ key( $sync_pro ) ];
+						$delete_pro[ $data_key ] = $sync_pro[ key( $sync_pro ) ];
 					}
 				}
 			}
@@ -123,10 +122,10 @@ class WooSquare_Sync_Logs {
 	 *
 	 * @uses $wpdb WordPress database abstraction object.
 	 *
-	 * @param array  $data An array of data about the synced items, including status, messages, and product/category information.
-	 * @param int    $log_id Optional. The ID of an existing log entry to update. If not provided, a new log entry will be created.
+	 * @param array  $data      An array of data about the synced items, including status, messages, and product/category information.
+	 * @param int    $log_id    Optional. The ID of an existing log entry to update. If not provided, a new log entry will be created.
 	 * @param string $direction The direction of the sync ('woo_to_square' or 'square_to_woo').
-	 * @param string $item The type of item being synced (e.g., 'product', 'category').
+	 * @param string $item      The type of item being synced (e.g., 'product', 'category').
 	 *
 	 * @return int|void The ID of the created or updated log entry, or void if an existing log entry was updated.
 	 */
@@ -142,8 +141,14 @@ class WooSquare_Sync_Logs {
 			$failed_pro          = array();
 			$category_failed_pro = array();
 			if ( ! empty( $data ) ) {
-				foreach ( $data as $kkkeyy => $sync_pro ) {
-					$id = $sync_pro[ key( $sync_pro ) ]['id'];
+				foreach ( $data as $sync_pro ) {
+					$id = null;
+					if ( is_array( $sync_pro ) ) {
+						$current_key = key( $sync_pro );
+						if ( isset( $sync_pro[ $current_key ]['id'] ) ) {
+							$id = $sync_pro[ $current_key ]['id'];
+						}
+					}
 					if ( isset( $id ) && ! empty( $id ) ) {
 						if ( isset( $sync_pro[ key( $sync_pro ) ]['item'] ) && 'category' === $sync_pro[ key( $sync_pro ) ]['item'] ) {
 							$category = get_term_by( 'id', $id, 'product_cat' );
@@ -168,17 +173,18 @@ class WooSquare_Sync_Logs {
 								$sku         = $product->get_sku();
 								$pro_message = $sync_pro[ key( $sync_pro ) ]['message'];
 								if ( 'variable' === $product->get_type() ) {
-									$product_variation_skus = '';
-									$variations             = $product->get_available_variations();
-									$variations_id          = wp_list_pluck( $variations, 'variation_id' );
+											$product_variation_skus = '';
+											$variations             = $product->get_available_variations();
+											$variations_id          = wp_list_pluck( $variations, 'variation_id' );
 									foreach ( $variations_id as $var_id ) {
 										$product_var             = wc_get_product( $var_id );
 										$product_variation_skus .= $product_var->get_sku() . ', ';
 									}
-									$sku = $product_variation_skus;
-									if ( isset( $sync_pro[ key( $sync_pro ) ]['var_error'] ) ) {
-										$pro_message = $sync_pro[ key( $sync_pro ) ]['message'] . ' - ' . $sync_pro[ key( $sync_pro ) ]['var_error']['message'];
-									}
+										$sku     = $product_variation_skus;
+									$pro_key     = key( $sync_pro );
+									$pro_message = ( $sync_pro[ $pro_key ]['message'] ?? '' ) .
+												( isset( $sync_pro[ $pro_key ]['var_error']['message'] ) ? ' - ' . $sync_pro[ $pro_key ]['var_error']['message'] : '' );
+
 								}
 								$product_data[] = array(
 									'name'    => $product->get_name(),
@@ -232,8 +238,7 @@ class WooSquare_Sync_Logs {
 			}
 
 			if ( $add_count > 0 && $update_count > 0 && $failed_count > 0
-				&&
-				$category_add_count > 0 && $category_update_count > 0 && $category_failed_count > 0
+				&& $category_add_count > 0 && $category_update_count > 0 && $category_failed_count > 0
 			) {
 				$status = __( 'Sync Partially', 'woosquare' );
 			} elseif ( 0 < $add_count && 0 === $update_count && 0 < $failed_count ) {
@@ -280,12 +285,12 @@ class WooSquare_Sync_Logs {
 	 *
 	 * @uses $wpdb WordPress database abstraction object.
 	 *
-	 * @param string $time The timestamp of the sync event.
-	 * @param string $status The status of the sync event (e.g., 'success', 'failed').
-	 * @param string $message A detailed message about the sync event.
+	 * @param string $time      The timestamp of the sync event.
+	 * @param string $status    The status of the sync event (e.g., 'success', 'failed').
+	 * @param string $message   A detailed message about the sync event.
 	 * @param string $direction The direction of the sync ('woo_to_square' or 'square_to_woo').
-	 * @param string $item The item being synced (e.g., product ID, order ID).
-	 * @param mixed  $data Additional data related to the sync event (can be an array or serialized string).
+	 * @param string $item      The item being synced (e.g., product ID, order ID).
+	 * @param mixed  $data      Additional data related to the sync event (can be an array or serialized string).
 	 */
 	public function woosquare_item_sync_logs( $time, $status, $message, $direction, $item, $data ) {
 		$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
@@ -319,13 +324,13 @@ class WooSquare_Sync_Logs {
 	 *
 	 * @uses $wpdb WordPress database abstraction object.
 	 *
-	 * @param string $time The timestamp of the sync event.
-	 * @param string $status The status of the sync event (e.g., 'success', 'failed').
-	 * @param string $message A detailed message about the sync event.
+	 * @param string $time      The timestamp of the sync event.
+	 * @param string $status    The status of the sync event (e.g., 'success', 'failed').
+	 * @param string $message   A detailed message about the sync event.
 	 * @param string $direction The direction of the sync ('woo_to_square' or 'square_to_woo').
-	 * @param string $item The item being synced (e.g., product ID, order ID).
-	 * @param mixed  $data Additional data related to the sync event (can be an array or serialized string).
-	 * @param int    $log_id The ID of the sync log to update.
+	 * @param string $item      The item being synced (e.g., product ID, order ID).
+	 * @param mixed  $data      Additional data related to the sync event (can be an array or serialized string).
+	 * @param int    $log_id    The ID of the sync log to update.
 	 */
 	public function woosquare_item_sync_update_logs( $time, $status, $message, $direction, $item, $data, $log_id ) {
 		$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
@@ -359,7 +364,7 @@ class WooSquare_Sync_Logs {
 	 * @uses $wpdb WordPress database abstraction object.
 	 */
 	public function woosquare_delete_sync_log() {
-		if ( ! isset( $_POST['log_nonce'] ) || wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
+		if ( ! isset( $_POST['log_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 		}
 		if ( ! empty( $_POST['log_id'] ) ) {
@@ -373,7 +378,7 @@ class WooSquare_Sync_Logs {
 				)
 			);
 
-			echo esc_html( $html );
+			echo esc_html( $result );
 			die();
 
 		}
@@ -387,7 +392,7 @@ class WooSquare_Sync_Logs {
 	 * @uses $wpdb WordPress database abstraction object.
 	 */
 	public function woosquare_get_filter_sync_log() {
-		if ( ! isset( $_POST['log_nonce'] ) || !wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
+		if ( ! isset( $_POST['log_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 		}
 		if ( isset( $_POST['fromDate'] ) && isset( $_POST['toDate'] ) ) {
@@ -461,7 +466,8 @@ class WooSquare_Sync_Logs {
 	 * @uses $wpdb WordPress database abstraction object.
 	 */
 	public function woosquare_reset_filter_sync_log() {
-		if ( ! isset( $_POST['log_nonce'] ) || wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
+
+		if ( ! isset( $_POST['log_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['log_nonce'] ) ), 'my_log_nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 		}
 		global $wpdb;
@@ -499,6 +505,10 @@ class WooSquare_Sync_Logs {
 			}
 		}
 
+		if ( empty( $html ) ) {
+			$html .= '<tr class="empty-row"><td colspan="6">' . esc_html__( 'No logs found.', 'woosquare' ) . '</td></tr>';
+		}
+
 		echo wp_kses_post( $html );
 		die();
 	}
@@ -520,7 +530,7 @@ class WooSquare_Sync_Logs {
 			$table_name     = $wpdb->prefix . WOO_SQUARE_ITEM_SYNC_LOGS_TABLE;
 			$sync_direction = sanitize_text_field( wp_unslash( $_POST['sync_direction'] ) );
 			$sql            = $wpdb->prepare(
-				"DELETE FROM {$table_name} WHERE sync_direction = %s", // phpcs:ignore
+          "DELETE FROM {$table_name} WHERE sync_direction = %s", // phpcs:ignore
 				$sync_direction
 			);
 			// Execute the query.
@@ -582,7 +592,7 @@ class WooSquare_Sync_Logs {
 						}
 					}
 					if ( isset( $dd->item ) && 'category' === $dd->item ) {
-						$category_html .= '<tr class="log_detail_table_category_body_row">
+							$category_html .= '<tr class="log_detail_table_category_body_row">
 								<td class="log_detail_table_category_data"><span class="log_detail_table_category_data_text ' . $class . '">' . $dd->name . '</span></td>
 								<td class="log_detail_table_category_data"><span class="log_detail_table_category_data_text ' . $class . '">' . $status . '</span></td>
 								<td class="log_detail_table_category_data"><span class="log_detail_table_category_data_text ' . $class . '">' . $message . '</span></td>

@@ -24,8 +24,8 @@
 
 
 		<?php
-			$data = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
-			parse_str( $data, $query_params );
+		$data = isset( $_SERVER['QUERY_STRING'] ) ? sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) : '';
+		parse_str( $data, $query_params );
 
 		?>
 		<div class="welcome-panel <?php echo isset( $query_params['page'] ) ? esc_html( sanitize_text_field( wp_unslash( $query_params['page'] ) ) ) : ''; ?>">
@@ -74,7 +74,7 @@
 								</tr>
 							</thead>
 									
-							<tbody class="product_list_table_body woo_to_square_table_body">	
+							<tbody class="product_list_table_body woo_to_square_table_body">    
 								<?php
 								global $wpdb;
 								$table_name            = $wpdb->prefix . WOO_SQUARE_ITEM_SYNC_LOGS_TABLE;
@@ -106,7 +106,7 @@
 							</tbody>
 							<!-- Add more rows as needed -->
 						</table>
-						<div id="filter-sync-loader" style="display:none">
+						<div id="filter-sync-loader-woo_to_square" style="display:none">
 							<img width=30%; height=30% src="<?php echo esc_url( plugins_url( 'views/images/ring.gif', __DIR__ ) ); ?>"
 								alt="loading">
 						</div>
@@ -155,7 +155,7 @@
 							</tbody>
 							<!-- Add more rows as needed -->
 						</table>
-						<div id="filter-sync-loader" style="display:none">
+						<div id="filter-sync-loader-square_to_woo" style="display:none">
 							<img width=30%; height=30% src="<?php echo esc_url( plugins_url( 'views/images/ring.gif', __DIR__ ) ); ?>"
 								alt="loading">
 						</div>

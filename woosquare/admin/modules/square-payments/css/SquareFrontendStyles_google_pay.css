@@ -18,3 +18,72 @@
   cursor: pointer;
   display: none;
 }
+
+
+.woocommerce-cart #google-pay-button {
+    display: flex; /* Ensures the button behaves like a block and stretches */
+    justify-content: center; /* Center-align the content */
+    margin-top: 10px; /* You can adjust the margin if necessary */
+}
+
+.woocommerce-cart #gpay-button-online-api-id {
+        width: 100%;
+    max-width: 100%;
+    /* height: 100%; */
+    padding: 0px 45px;
+    border-radius: 4px;
+}
+
+.woocommerce-cart #google-pay-button button iframe {
+    width: 100%; /* Stretch the iframe to match the button */
+}
+
+.woocommerce-cart #google-pay-button svg {
+    max-width: 100%; /* Ensure the SVG scales within the button */
+}
+
+.wc-block-components-express-payment-continue-rule.wc-block-components-express-payment-continue-rule--cart {
+    font-weight: 300;
+    font-size: 15px;
+}
+
+#google-pay-button > div {
+    width: 100%;
+}
+.wc-block-components-express-payment-continue-rule {
+    padding: 0;
+}
+.woocommerce-cart #gpay-button-online-api-id {
+    position: relative;
+}
+.gpay-card-info-animation-container {
+    left: 0;
+    right: 0;
+}
+.woocommerce .blockUI.blockOverlay:before {
+    position: fixed;
+}
+
+form .gpay-card-info-container {
+    min-width: auto;
+    width: 218px;
+}
+
+.blockUI.blockOverlay:before {
+   height: 1em;
+    width: 1em;
+    display: block;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    margin-left: 0;
+    margin-top: 0;
+    content: "";
+    animation: spin 1s ease-in-out infinite;
+    background: url(https://expresscheckout.instawp.xyz/wp-content/plugins/woosquare-premium/premium-files/admin/modules/square-payments/img/loader.svg) center center;
+    background-size: cover;
+    line-height: 1;
+    text-align: center;
+    font-size: 2em;
+    color: rgba(0, 0, 0, .75);
+}

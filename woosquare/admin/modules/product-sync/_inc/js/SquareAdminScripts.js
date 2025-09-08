@@ -69,6 +69,21 @@ jQuery( document ).ready( function( $ ) {
 				$.WooSquare_admin.sync( 0, $( this ).attr( 'id' ) );
 			});
 
+			$( document.body ).on( 'change', '#woocommerce_square_testmode', function() {
+				if ( $( this ).is( ':checked' ) ) {
+					$( '#woocommerce_square_application_id' ).parents( 'tr' ).eq(0).hide();
+					$( '#woocommerce_square_token' ).parents( 'tr' ).eq(0).hide();
+
+					$( '#woocommerce_square_sandbox_application_id' ).parents( 'tr' ).eq(0).show();
+					$( '#woocommerce_square_sandbox_token' ).parents( 'tr' ).eq(0).show();
+				} else {
+					$( '#woocommerce_square_application_id' ).parents( 'tr' ).eq(0).show();
+					$( '#woocommerce_square_token' ).parents( 'tr' ).eq(0).show();
+
+					$( '#woocommerce_square_sandbox_application_id' ).parents( 'tr' ).eq(0).hide();
+					$( '#woocommerce_square_sandbox_token' ).parents( 'tr' ).eq(0).hide();
+				}
+			});
 
 			$( '#woocommerce_square_testmode' ).trigger( 'change' );
 

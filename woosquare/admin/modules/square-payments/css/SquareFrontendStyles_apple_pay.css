@@ -44,13 +44,20 @@
   } 
 }
 
+.appleblack {
+-apple-pay-button-style: black;
+}
+
+.applewhite { 
+-apple-pay-button-style: white;
+}
+
 #apple-pay-button {
     height: 48px;
     width: 100%;
     display: inline-block;
     -webkit-appearance: -apple-pay-button;
     -apple-pay-button-type: plain;
-    -apple-pay-button-style: black;
 }
 
 .placeordernone {

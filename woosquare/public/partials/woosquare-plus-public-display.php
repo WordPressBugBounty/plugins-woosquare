@@ -4,8 +4,8 @@
  *
  * This file is used to markup the public-facing aspects of the plugin.
  *
- * @link       wpexperts.io
- * @since      1.0.0
+ * @link  wpexperts.io
+ * @since 1.0.0
  *
  * @package    Woosquare_Plus
  * @subpackage Woosquare_Plus/public/partials

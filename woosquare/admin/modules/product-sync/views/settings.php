@@ -8,29 +8,33 @@
 ?>
 
 <div class="bodycontainerWrap">
-	<?php if ( isset( $success_message ) && $success_message ) : ?>
+	<?php if ( $success_message ) : ?>
 	<div class="updated">
 		<p><?php echo esc_html( $success_message ); ?></p>
 	</div>
 	<?php endif; ?>
-	<?php if ( isset( $error_message ) && $error_message ) : ?>
+	<?php if ( $error_message ) : ?>
 	<div class="error">
 		<p><?php echo esc_html( $error_message ); ?></p>
 	</div>
 	<?php endif; ?>
 
-
-	<?php if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) : ?>
+	
+	<?php
+	$ordurl = site_url() . '/wc-api/square_stock_sync/';
+	if ( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) :
+		?>
 			
 	<div class="bodycontainer">
 
 		<div id="tabs" class="md-elevation-4dp bg-theme-primary">
-			<?php
-			$woosquare_plus = new woosquare_plus();
-			echo wp_kses_post( $woosquare_plus->wooplus_get_toptabs() );
-			?>
+		<?php
+		$woosquare_plus = new Woosquare_Plus();
+		echo wp_kses_post( $woosquare_plus->wooplus_get_toptabs() );
+		?>
 		</div>
-		<div class="welcome-panel ext-panel <?php echo esc_html( isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '' ); ?>-1">
+
+		<div class="welcome-panel ext-panel <?php echo esc_html( isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '' ); ?>-1"> <?php // phpcs:ignore ?>
 			<h1><svg height="20px" viewBox="0 0 512 511" width="20px" xmlns="http://www.w3.org/2000/svg">
 					<path
 						d="m405.332031 256.484375c-11.796875 0-21.332031 9.558594-21.332031 21.332031v170.667969c0 11.753906-9.558594 21.332031-21.332031 21.332031h-298.667969c-11.777344 0-21.332031-9.578125-21.332031-21.332031v-298.667969c0-11.753906 9.554687-21.332031 21.332031-21.332031h170.667969c11.796875 0 21.332031-9.558594 21.332031-21.332031 0-11.777344-9.535156-21.335938-21.332031-21.335938h-170.667969c-35.285156 0-64 28.714844-64 64v298.667969c0 35.285156 28.714844 64 64 64h298.667969c35.285156 0 64-28.714844 64-64v-170.667969c0-11.796875-9.539063-21.332031-21.335938-21.332031zm0 0" />
@@ -40,37 +44,132 @@
 						d="m496.382812 16.101562c-20.796874-20.800781-54.632812-20.800781-75.414062 0l-29.523438 29.523438 75.414063 75.414062 29.523437-29.527343c10.070313-10.046875 15.617188-23.445313 15.617188-37.695313s-5.546875-27.648437-15.617188-37.714844zm0 0" />
 				</svg> Synchronization of Products Settings</h1>
 
-			<?php if ( $currency_mismatch_flag ) { ?>
+		<?php if ( $currency_mismatch_flag ) { ?>
 			<br />
 			<div id="woo_square_error" class="error" style="background: #ddd;">
 				<p style="color: red;font-weight: bold;">The currency code of your Square account [
-					<?php echo esc_html( $square_currency_code ); ?> ] does not match WooCommerce [ <?php echo esc_html( $woo_currency_code ); ?> ]
+			<?php echo esc_html( $square_currency_code ); ?> ] does not match WooCommerce [ <?php echo esc_html( $woo_currency_code ); ?> ]
 				</p>
 			</div>
-				<?php
-			}
-
-			if ( empty( get_option( 'sync_on_add_edit' ) ) ) {
-				update_option( 'sync_on_add_edit', 1 );
-				update_option( 'sync_square_order_notify', '' );
-				update_option( 'html_sync_des', '' );
-
-			}
-
-
-			?>
-			<form method="post" 
 			<?php
-			if ( $currency_mismatch_flag ) :
-				?>
+		}
+		if ( empty( get_option( 'woo_square_merging_option' ) ) ) {
+			update_option( 'woo_square_merging_option', 1 );
+			update_option( 'sync_square_order_notify', '' );
+			update_option( 'html_sync_des', '' );
+
+		}
+
+
+		?>
+			<form method="post" 
+		<?php
+		if ( $currency_mismatch_flag ) :
+			?>
 				style="opacity:0.5;pointer-events:none;"
-				<?php endif; ?>>
+		<?php endif; ?>>
 				<input type="hidden" value="1" name="woo_square_settings" />
 
 
 				<div class="formWrap">
 
 					<ul>
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+						<li>
+							<strong>Auto Synchronize</strong>
+							<div class="elementBlock">
+								<label><input type="radio"
+										<?php echo ( get_option( 'woo_square_auto_sync' ) ) ? 'checked' : ''; ?> value="1"
+										name="woo_square_auto_sync"> On </label>
+								<label><input type="radio"
+										<?php echo ( get_option( 'woo_square_auto_sync' ) ) ? '' : 'checked'; ?> value="0"
+										name="woo_square_auto_sync"> Off </label>
+							</div>
+
+							<ul class="subData auto_sync_duration_div"
+								style="<?php echo ( get_option( 'woo_square_auto_sync' ) ) ? '' : 'display: none'; ?>">
+								<li class="auto_sync_duration_div">
+									<strong>Auto Sync each</strong>
+									<div class="elementBlock">
+										<select name="woo_square_auto_sync_duration">
+											<option
+												<?php
+												if ( get_option( 'woo_square_auto_sync_duration' ) === '60' ) :
+													?>
+													selected=""
+												<?php endif; ?> value="60"> 1 hour </option>
+											<option
+							<?php
+							if ( get_option( 'woo_square_auto_sync_duration' ) === '720' ) :
+								?>
+													selected=""
+							<?php endif; ?> value="720"> 12 hours </option>
+											<option
+							<?php
+							if ( get_option( 'woo_square_auto_sync_duration' ) === '1440' ) :
+								?>
+													selected=""
+							<?php endif; ?> value="1440"> 24 hours </option>
+										</select>
+									</div>
+
+								</li>
+								<li>
+									<strong>Merging Option</strong>
+
+									<div class="elementBlock">
+										<label><input type="radio"
+							<?php echo ( get_option( 'woo_square_merging_option' ) === '1' ) ? 'checked' : ''; ?>
+												value="1" class='woo_square_merging_option'
+												name="woo_square_merging_option">
+												WooCommerce Product Override
+
+											<p class="help-text help-text2">Products on WooCommerce will override the data of the items on Square</p>
+										</label>
+										<label class="m-l-10"><input type="radio"
+							<?php echo ( get_option( 'woo_square_merging_option' ) === '2' ) ? 'checked' : ''; ?>
+												value="2" class='woo_square_merging_option'
+												name="woo_square_merging_option">
+												Square Product Override
+											<p class="help-text help-text2">Items on Square will override the data of the Products on WooCommerce</p>
+										</label>
+
+									</div>
+								</li>
+								<li class="">
+									<strong>Sync Preference</strong>
+
+									<div class="elementBlock ">
+
+										<label><input type="radio"
+							<?php echo ( get_option( 'woo_square_sync_preference' ) ) ? 'checked' : ''; ?>
+												value="1" name="woo_square_sync_preference"> All</label>&nbsp;
+										<label><input type="radio"
+							<?php echo ( get_option( 'woo_square_sync_preference' ) ) ? '' : 'checked'; ?>
+												value="0" name="woo_square_sync_preference"> <a
+												class='woo_square_sync_preference'>Specific Products </a></label>
+							<?php
+							if ( ! empty( get_option( 'woo_square_listsaved_products_square' ) )
+							|| ! empty( get_option( 'woo_square_listsaved_products_wooco' ) )
+							) {
+								?>
+										&nbsp;&nbsp;&nbsp; <br /> <br />
+
+										<a class='woo_square_sync_preference woosquare_edit_sync'> Edit List </a>
+								<?php } ?>
+
+
+									</div>
+								</li>
+							</ul>
+						</li>
+					<?php } ?>
+
+
+
+
+
+
 						<li class="">
 
 							<strong>Sync on edit in WooCommerce</strong>
@@ -80,20 +179,19 @@
 
 							<div class="elementBlock">
 								<label><input type="radio"
-										<?php echo ( intval( get_option( 'sync_on_add_edit' ) ) === 1 ) ? 'checked' : ''; ?> value="1"
+			<?php echo ( get_option( 'sync_on_add_edit' ) === '1' ) ? 'checked' : ''; ?> value="1"
 										name="sync_on_add_edit"> Yes </label>
 								<label><input type="radio"
-										<?php echo ( intval( get_option( 'sync_on_add_edit' ) ) === 2 ) ? 'checked' : ''; ?> value="2"
+			<?php echo ( get_option( 'sync_on_add_edit' ) === '2' ) ? 'checked' : ''; ?> value="2"
 										name="sync_on_add_edit"> No </label>
 
-								<div class='pro_fields'> 
-								<?php
-								$edit_fields = get_option( 'woosquare_pro_edit_fields' );
-
-								if ( empty( $edit_fields ) ) {
-									$edit_fields = array();
-								}
-								?>
+								<div class='pro_fields' style="display: none;"> 
+			<?php
+			$edit_fields = get_option( 'woosquare_pro_edit_fields' );
+			if ( empty( $edit_fields ) ) {
+				$edit_fields = array();
+			}
+			?>
 									Select Product field to be sync after edit.
 
 									<div>
@@ -157,8 +255,57 @@
 										name="html_sync_des"> Yes </label>
 							</div>
 						</li>
+						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+						<li>
+							<strong><?php echo esc_html__( 'Enable new variation format ?', 'woosquare' ); ?></strong>
+							<p class="description ext">By enabling this option, you can create variations in Square using options (eg: color and size), see the <a href="https://apiexperts.io/documentation/woosquare-plus/">documentation</a>.</p>
+							<div class="elementBlock">
+								<label><input type="checkbox"
+										<?php echo ( get_option( 'enable_woosquare_new_variation_format' ) === '1' ) ? 'checked' : ''; ?> value="1"
+										name="enable_woosquare_new_variation_format"> <?php echo esc_html__( 'Yes', 'woosquare' ); ?> </label>
+							</div>
+						</li>
+						<li>
+							<strong>Enable Stock sync to Woocommerce via webhook ?</strong>
+							<div class="elementBlock">
+								<label><input type="checkbox"
+										<?php echo ( get_option( 'woosquare_stocksync_webhook' ) === '1' ) ? 'checked' : ''; ?> value="1"
+										name="woosquare_stocksync_webhook"> Yes </label>
+							</div><br>
+							<div class="squ-order-sync-description" style="padding:10px">
+								<p>
+									For instant Square items stock sync to WooCommerce stock you need to follow below instruction.
+								</p>
+								<p>If you don't have an account, go to <a target="_blank"
+										href="https://squareup.com/signup">https://squareup.com/signup</a> to create one. You need a
+									Square account to register an application with Square.
+									Register your application with Square
+								</p>
+								<p>
+									Then go to <a target="_blank"
+										href="https://connect.squareup.com/apps">https://connect.squareup.com/apps</a> and sign in
+									to your Square account. Then <b>click New Application</b> and give the name for your application
+									to Create App.
 
+									The application dashboard displays your new app's sandbox credentials. Insert below these
+									sandbox credentials.
+								</p>
+								<p>
+									Then goto <b>Webhooks</b> tab and insert this link
+									<a target="blank" href="<?php echo esc_url( $ordurl ); ?>">
+																		<?php
+																		echo esc_html( $ordurl );
+																		?>
+																		</a> in textbox "Notification URL".
+								</p>
+								<p>
+									For Further More <a href="https://apiexperts.io/documentation/woosquare-plus/#stock-synchronization-3" target="_blank" >STOCK SYNCHRONIZATION</a>.
+								</p>
 
+							</div>
+						</li>
+						<?php } ?>
+					
 					</ul>
 
 				</div>
@@ -171,26 +318,14 @@
 						</span>
 					</div>
 					<div class="col-md-8 text-right">
-
-						<?php
-						$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
-						$activate_modules_woosquare_plus  = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );
-						?>
-						<span class=" <?php echo esc_html( isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '' ); ?>-2"
-							<?php if ( $currency_mismatch_flag ) : ?>
-							style="opacity:0.5;pointer-events:none;" <?php endif; ?>>
-
-						  
-
-							<a 
-								class="btn waves-effect waves-light btn-rounded btn-secondary load-customize hide-if-no-customize"
+						
+						<span class=" <?php echo esc_html( isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '' ); ?>-2" > <?php // phpcs:ignore ?>
+							<a class="btn waves-effect waves-light btn-rounded btn-secondary load-customize hide-if-no-customize"
 								href="javascript:void(0)" id="manual_sync_wootosqu_btn"> Synchronize Woo To Square </a>
-							<a 
-								class="btn waves-effect waves-light btn-rounded btn-secondary load-customize hide-if-no-customize m-l-10"
+							<a class="btn waves-effect waves-light btn-rounded btn-secondary load-customize hide-if-no-customize m-l-10"
 								href="javascript:void(0)" id="manual_sync_squtowoo_btn"> Synchronize Square To Woo </a>
-   
-						</span>
 
+						</span>
 					</div>
 				</div>
 
@@ -228,8 +363,19 @@
 			<li><button id="sync-processing" href="#0" class="btn btn-rounded btn-warning">Close</button></li>
 		</ul>
 		<a href="#0" class="cd-popup-close img-replace"></a>
+		<div class="cd-popup-container-loading" style="display:none">
+			<h2>
+				Fetching Product. Please wait....
+			</h2>
+			<p>
+			0/0
+			</p>
+			<div class="progress-bar">
+				
+			</div>
+		</div>
 	</div> <!-- cd-popup-container -->
 </div> <!-- cd-popup -->
 
 
-<?php endif; ?>
+	<?php endif; ?>

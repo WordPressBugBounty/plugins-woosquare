@@ -7,20 +7,20 @@
  }
 
  .welcome-panel *{
-	 padding:0px;
+     padding:0px;
  }
  .welcome-panel.ext-panel {
-       
+       /* padding: 22px 30px 5px 30px; */
 }
  .welcome-panel{
-	    
+        /* padding: 25px 18px 32px 16px; */
  }
   .welcome-panel > p{
-	  padding-left:13px;
-	  margin: 0px 0px 15px;
+      padding-left:13px;
+      margin: 0px 0px 15px;
   }
  .welcome-panel h3{
-	 margin-top:0px;
+     margin-top:0px;
  } 
 .wp-square-connect-button span {
     vertical-align: top;
@@ -41,8 +41,12 @@ td.extlabel > label {
 a.wp-square-connect-button {
     display: inline-block;
     background-color: rgb(41, 150, 204);
+    /* height: 30px; */
     color: rgb(255, 255, 255);
+    /* box-shadow: rgb(153, 153, 153) 3px 4px 15px 2px; */
     font-weight: 700;
+    /* font-family: "Square Market", Helvetica, Arial, "Hiragino Kaku Gothic Pro", "ヒラギノ角ゴ Pro W3", メイリオ, Meiryo, "ＭＳ Ｐゴシック", sans-serif; */
+    /* text-rendering: optimizelegibility; */
     text-transform: uppercase;
     letter-spacing: 1px;
     text-decoration: none;
@@ -70,7 +74,9 @@ a.wp-square-connect-button {
 .woosquare-plus_page_woosquare-plus-module .onoffswitch-inner_items_sync:before,
 .woosquare-plus_page_woosquare-plus-module .extonoffpp label span.extonoff:before
 {
-    
+    /* background-color:#c3c3c3;
+    color: #FFF;
+    border-color:#c3c3c3!important;     */
 }
 .woosquare-plus_page_woosquare-plus-module .extonofflabel span.extonoff::after{
      background-color: #c3c3c3!important;
@@ -87,7 +93,7 @@ a.wp-square-connect-button {
         padding: 4px 18px 3px;
     margin-top: 0px!important;
     margin-bottom: 0px;
-	transition: all .5s;
+    transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
@@ -108,7 +114,7 @@ article.hentry.prtn-article {
 }
 
 .article-content {
-	    transition: all .5s;
+        transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
@@ -116,26 +122,61 @@ article.hentry.prtn-article {
      min-height: 174px;
 }
 .welcome-panel textarea{
-	width:100%;
+    width:100%;
 }
 .welcome-panel.ext-panel.square_card_sync {
     padding: 24px 30px 25px;
 }
 .welcome-panel.ext-panel.square_card_sync table.form-table tr td{
-	padding-left:0px;
+    padding-left:0px;
 }
 .welcome-panel.ext-panel.square_card_sync table.form-table td label {
     margin-right: 15px;
+}
+.welcome-panel.ext-panel.square-item-sync-1{
+    /* padding: 23px 25px 25px 30px; */
+}
+.welcome-panel.ext-panel.order-sync-1{
+    /* padding: 22px 30px 25px 30px; */
+}
+.welcome-panel.square-payment-gateway {
+    /* padding: 0px 30px 25px 30px; */
+}
+.welcome-panel.ext-panel.square-transaction-sync {
+    /* padding: 20px 30px 25px 28px; */
+}
+.welcome-panel.ext-panel.square-card-sync {
+    /* padding: 23px 30px 25px 30px; */
+}
+.welcome-panel.square-item-sync-2 {
+    /* padding: 30px 25px 0px 30px; */
+}
+.welcome-panel.ext-panel.square-settings-2 {
+    /* padding: 22px 30px 25px 30px; */
+}
+.welcome-panel.ext-panel.square-settings-1 {
+    /* padding: 22px 30px 0px 30px; */
+}
+.extonoffpp {
+    /* width: 70px!important; */
 }
 
 .welcome-panel.square-item-sync-2 a#manual_sync_wootosqu_btn,
 .welcome-panel.square-item-sync-2 a#manual_sync_squtowoo_btn {
     margin-top: 0px;
 }
-
+.extonoffpp .extonoffouter{
+        /* right: 37px; */
+}
 .welcome-panel.woosquare-plus-module > h3 {
     padding-left: 15px;
     margin-bottom: 20px;
+}
+.welcome-panel::before {
+background: none !important;
+}
+.welcome-panel {
+    background: white;
 }
 
 .blog-posts.hfeed {
@@ -261,45 +302,45 @@ article.hentry.prtn-article {
         color: white;
         border: 1px solid #222525;
     }
-	
-	label.extonofflabel,
-	label.onoffswitch-label_sales_sync,
-	label.onoffswitch-label_customer_sync,
-	label.onoffswitch-label_customer_sync{
-		
-	}
-	.extonoffpp span.extonoffouter{
-		
-	}
+    
+    label.extonofflabel,
+    label.onoffswitch-label_sales_sync,
+    label.onoffswitch-label_customer_sync,
+    label.onoffswitch-label_customer_sync{
+        /* height: 28px!important; */
+    }
+    .extonoffpp span.extonoffouter{
+        /* height:18px; */
+    }
 
-	label.onoffswitch-label_woosquare_transaction_addon {
-		
-	}
+    label.onoffswitch-label_woosquare_transaction_addon {
+        /* height: 28px; */
+    }
 
-	button.btn.btn-primary.video-btn.btn-read.video-btn {
-		background: #23a8e1;
-		color: #FFF;
-		border-color: #23a8e1;
-		display: inline-block;
-		right: 20px;
-		padding: 4px 18px 3px;
-		margin-top: 20px;
-		margin-bottom: 10px;
-		font-size: 11.5px;
-		color: #FFF;
-		text-transform: uppercase;
-		border-radius: 0px;
-	}
-	button.btn.btn-primary.video-btn.btn-read.video-btn {
-		margin-top: 6px;
-		padding: 4.5px;
-	}
+    button.btn.btn-primary.video-btn.btn-read.video-btn {
+        background: #23a8e1;
+        color: #FFF;
+        border-color: #23a8e1;
+        display: inline-block;
+        right: 20px;
+        padding: 4px 18px 3px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        font-size: 11.5px;
+        color: #FFF;
+        text-transform: uppercase;
+        border-radius: 0px;
+    }
+    button.btn.btn-primary.video-btn.btn-read.video-btn {
+        margin-top: 6px;
+        padding: 4.5px;
+    }
    #myModal .modal-body{
-	    padding: 0rem;
+        padding: 0rem;
 }
 #myModal .modal-dialog {
     max-width: 700px;
-	margin: 10rem auto;
+    margin: 10rem auto;
 }
 .entry-content > div {
     padding-top: 20px;
@@ -324,12 +365,9 @@ article.hentry.prtn-article {
 .woosquare-plus-module .blog-posts h3.entry-title a {
     color: #111;
 }
-a.modules_title {
-    color: #7460ee;
-    text-decoration: none !important;
-}
+
 .extonoffpp {
-   
+    /* margin-top: 7px; */
 }
 span.mobiletext {
     display: none;
@@ -344,18 +382,44 @@ span.mobiletext {
     max-width: 250px !important;
     margin: 0px auto !important;
 }
+
+button.apple_verify_domain, button.apple_verify_domain {
+  padding: 3px 8px;
+  background: #26c6da;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 3px;
+}
+button.apple_verify_domain:disabled, button.apple_verify_domain:disabled {
+  cursor: not-allowed;
+  background: #919191;
+}
+.apple_pay_verification {
+  display: flex;
+  align-items: center; /* Align vertically in the center */
+  gap: 3px; /* Space between items */
+}
+.apple_pay_verification button,
+.apple_pay_verification p {
+  margin: 0; /* Remove default margins */
+  margin-left: 5px;
+  margin-top: -5px;
+}
+.apple_domain_error, .apple_domain_error_test {
+  color: red; /* Add color to the error message */
 @media only screen and (max-width: 1520px) {
-	.article-content {
-		height: 180px;
-		    transition: all .5s;
+    .article-content {
+        height: 180px;
+            transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
     -ms-transition: all .5s;
-	}
+    }
 .prtn-article .article-content {
-    
-}	
+    /* padding: 10px 10px!important; */
+}    
 }
 @media only screen and (max-width: 1345px) {
 .woosquare-plus-module .blog-posts button.btn.btn-primary.video-btn.btn-read.video-btn,
@@ -384,39 +448,34 @@ span.mobiletext {
 .article-content {
     height: 180px;
 }     
-		.post-outer{
-			width:50%!important;
-		    transition: all .5s;
+        .post-outer{
+            width:50%!important;
+            transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
     -ms-transition: all .5s;}
 }
 @media only screen and (max-width: 768px) {
-	.post-outer{
-		width:100%!important;
-		    transition: all .5s;
+    .post-outer{
+        width:100%!important;
+            transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
     -ms-transition: all .5s;}
-	.article-content {
-		    transition: all .5s;
+    .article-content {
+            transition: all .5s;
     -o-transition: all .5s;
     -webkit-transition: all .5s;
     -moz-transition: all .5s;
     -ms-transition: all .5s;
-	height: auto;
-	}
-	.welcome-panel.ext-panel.square_card_sync table.form-table td label:first-child {
-		margin-right: 0px;
-		display:block;
-		width:100%;
-		margin-bottom:20px;
-	}
-}
-.notice-error a.moduleslink {
-    color: red;
-    font-weight: 400;
-    text-decoration: underline;
+    height: auto;
+    }
+    .welcome-panel.ext-panel.square_card_sync table.form-table td label:first-child {
+        margin-right: 0px;
+        display:block;
+        width:100%;
+        margin-bottom:20px;
+    }
 }
