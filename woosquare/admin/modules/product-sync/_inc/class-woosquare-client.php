@@ -298,7 +298,7 @@ class WooSquare_Client {
 
 				$oauth_connect_url = 'https://connect.woocommerce.com/renew/square';
 
-				if ( WOOSQU_ENABLE_STAGING ) {
+				if ( get_transient( 'is_sandbox' ) ) {
 					$oauth_connect_url = 'https://connect.woocommerce.com/renew/squaresandbox';
 				}
 

@@ -16,7 +16,59 @@ fieldset.wooSquare-checkout {
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-.table-responsive {
+/* Safari/Mac specific fixes for card container */
+#card-container_payment {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 60px !important;
+    min-width: 300px !important;
+    width: 100% !important;
+}
+
+/* Ensure iframe is visible in Safari */
+#card-container_payment iframe {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    min-width: 300px !important;
+    height: 97px !important;
+    min-height: 97px !important;
+    border: 0 !important;
+}
+
+/* Safari webkit specific fixes */
+@supports (-webkit-appearance: none) {
+    #card-container_payment {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+    }
+    
+    #card-container_payment iframe {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    }
+    
+    /* Ensure payment form parent is visible */
+    #payment-form {
+        display: block !important;
+        visibility: visible !important;
+        min-height: 60px !important;
+    }
+}
+
+/* Additional Safari fixes for parent containers */
+.wooSquare-checkout {
+    display: block !important;
+    visibility: visible !important;
+}
+
+.wooSquare-checkout #card-container_payment {
+    display: block !important;
+    visibility: visible !important;
+    min-height: 60px !important;
 }
 
 .payment_box.payment_method_square_plus {
@@ -28,9 +80,6 @@ fieldset.wooSquare-checkout {
         float: none;
         width: 100%;
     }
-}
-
-.cardWrap {
 }
 table.cardWrapTable {
     padding-top: 10px;
@@ -108,4 +157,177 @@ img.terminal-pay-button-img {
     padding: 5px;
     left: 0;
     width: 35px;
+}
+
+
+button.button.apply-reward-btn {
+    background-color: var(--wp--preset--color--contrast);
+    border-radius: .33rem;
+    border-color: var(--wp--preset--color--contrast);
+    align-items: center;
+    display: inline-flex
+;
+    height: auto;
+    justify-content: center;
+    position: relative;
+    text-align: center;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    transition: box-shadow .1s linear;
+    width: 100%;
+    padding: 1em;
+    font-family: inherit;
+    font-size: var(--wp--preset--font-size--small);
+    font-style: normal;
+    font-weight: 500;
+    color: var(--wp--preset--color--base);
+    cursor: pointer;
+}
+
+button#blocks-remove-loyalty-reward {
+    background-color: var(--wp--preset--color--contrast);
+    border-radius: .33rem;
+    border-color: var(--wp--preset--color--contrast);
+    align-items: center;
+    display: inline-flex
+;
+    height: auto;
+    justify-content: center;
+    position: relative;
+    text-align: center;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    transition: box-shadow .1s linear;
+    width: 100%;
+    padding: 1em;
+    font-family: inherit;
+    font-size: var(--wp--preset--font-size--small);
+    font-style: normal;
+    font-weight: 500;
+    color: var(--wp--preset--color--base);
+    cursor: pointer;
+}
+
+
+
+/* General Styling for both Loyalty Sections */
+.custom-loyalty-points,
+.loyalty-blocks-container-remove {
+  padding: 18px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e1e4e8;  /* Light grey border to match WooCommerce style */
+  margin-bottom: 20px;
+}
+
+/* Title Styling */
+.custom-loyalty-points span,
+.loyalty-blocks-container-remove h4 {
+  font-size: 1.125rem;  /* Default WooCommerce font size for headings */
+  font-weight: 600;
+  color: #000;  /* Black color for text */
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+/* Paragraph Styling */
+.custom-loyalty-points p,
+.loyalty-blocks-container-remove p {
+  margin: 8px 0;
+  color: #000;  /* Black color for text */
+  font-size: 1rem;  /* Default WooCommerce font size for body text */
+  line-height: 1.5;
+}
+
+/* Strong Elements for Highlight */
+.custom-loyalty-points strong,
+.loyalty-blocks-container-remove strong {
+  color: #000;  /* Black color for strong text */
+  font-weight: 600;
+}
+
+/* List Items for Rewards */
+.custom-loyalty-points ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin-top: 10px;
+}
+
+.custom-loyalty-points li {
+  padding-left: 18px;
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.custom-loyalty-points li::before {
+  position: absolute; 
+  left: 0;
+  color: #000;  /* Black bullet points */
+  font-weight: 600;
+}
+
+/* Radio Button Styling */
+.custom-loyalty-points input[type="radio"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+/* Button Styling */
+.apply-reward-btn,
+#blocks-remove-loyalty-reward {
+  padding: 10px 14px;
+  background: #000;  /* Black button */
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease;
+  text-align: center;
+}
+
+/* Active State for Buttons */
+.apply-reward-btn:active,
+#blocks-remove-loyalty-reward:active {
+  transform: translateY(1px);
+}
+/* Remove Bullet Points from List */
+.custom-loyalty-points ul,
+.loyalty-blocks-container-remove ul {
+  list-style-type: none;  /* Remove bullet points */
+  padding-left: 0;  /* Remove default padding */
+  margin-top: 10px;
+}
+
+.custom-loyalty-points li,
+.loyalty-blocks-container-remove li {
+  padding-left: 0;  /* Align list items without indentation */
+  margin-bottom: 10px;
+}
+/* Responsive Design */
+@media (max-width: 480px) {
+  .custom-loyalty-points,
+  .loyalty-blocks-container-remove {
+    padding: 14px;
+  }
+
+  .custom-loyalty-points span,
+  .loyalty-blocks-container-remove h4 {
+    font-size: 1rem;  /* Adjusted font size for mobile */
+  }
+
+  .custom-loyalty-points p,
+  .loyalty-blocks-container-remove p {
+    font-size: 0.95rem;  /* Slightly smaller font for mobile */
+  }
+
+  .apply-reward-btn,
+  #blocks-remove-loyalty-reward {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
 }

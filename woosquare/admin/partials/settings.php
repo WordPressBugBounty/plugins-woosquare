@@ -191,7 +191,7 @@
 
 				$query_args = array(
 					'redirect' => rawurlencode( rawurlencode( $redirect_url ) ),
-					'scopes'   => WOOSQU_PLUS_SCOPES,
+					'scopes'   => apply_filters( 'custom_scopes_filter', WOOSQU_PLUS_SCOPES ),
 				);
 
 				$url = WOOSQU_PLUS_CONNECTURL . '/login/';
@@ -342,7 +342,7 @@
 						<strong>Signup</strong></a>
 				</div>
 				<div class="videoWrapper">
-					<iframe width="420" height="225" src="https://www.youtube.com/embed/-uYI_a-k9Eo" frameborder="0"
+					<iframe width="420" height="225" src="https://www.youtube.com/embed/_PmNGXUC6Y8" frameborder="0"
 						allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
 						allowfullscreen></iframe>
 				</div>

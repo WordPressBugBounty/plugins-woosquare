@@ -9,9 +9,8 @@ jQuery(document).ready(function() {
 				action: 'my_ajax_get_pos_action',
 				nonce: POSTerminal.nonce,
 				type: 'send',
-				token: POSTerminal.access_token,
 				country_code: POSTerminal.country_code,
-				currency_code: POSTerminal.currency_cod,
+				currency_code: POSTerminal.currency_code,
 				location_id: POSTerminal.location_id
 			}
 			
@@ -31,34 +30,40 @@ jQuery(document).ready(function() {
 			})
 		});
 		
+		function isBlockCheckout() {
+			return jQuery('.wc-block-checkout').length > 0 || jQuery('form.wc-block-checkout__form').length > 0;
+		}
+
+		function isTerminalPaySelected() {
+			var selected = jQuery('input[name="radio-control-wc-payment-method-options"]:checked').val()
+				|| jQuery('input[name="payment_method"]:checked').val()
+				|| '';
+			return selected.indexOf('square_terminal_pay') === 0;
+		}
+
 		function completepym(){
 			// jQuery('#spinner').hide();
 			var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
-			if(jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_terminal_pay' ){
-				// pay_form.submit();
-				alert('trigger');
-				jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
-			}else{
+			// WSSS-416: after terminal checkout completes, submit block/classic checkout with term_checkout_id set.
+			if (isTerminalPaySelected() && isBlockCheckout()) {
+				jQuery('.wc-block-components-checkout-place-order-button').trigger('click');
+			} else {
 				$form.submit();
 			}
 		}
 		jQuery(document).on('click', '#terminal-pay-button', function(e) {
-			jQuery('#place_order').click();
-			// terminal_pay_process(e);
-			jQuery(document).ajaxComplete(function(event, xhr, settings) {
-	
-				if (xhr.responseJSON.messages == "" && settings.url == '/?wc-ajax=checkout') {
-	
-					terminal_pay_process(e);
-					
-				}    
-			});
-	
-			// console.log(jQuery('.woocommerce-error').length);
-			if ( jQuery('.woocommerce-error').length < 1){
-				
+			e.preventDefault();
+			// WSSS-416: on block checkout, run terminal flow first (do not Place Order before term_checkout_id exists).
+			if (isBlockCheckout()) {
+				terminal_pay_process(e);
+				return;
 			}
-	
+			jQuery('#place_order').click();
+			jQuery(document).ajaxComplete(function(event, xhr, settings) {
+				if (xhr.responseJSON && xhr.responseJSON.messages == '' && settings.url && settings.url.indexOf('wc-ajax=checkout') !== -1) {
+					terminal_pay_process(e);
+				}
+			});
 		});
 		function terminal_payment_process(e){
 			
@@ -68,10 +73,8 @@ jQuery(document).ready(function() {
 			e.preventDefault();
 			this.disabled = true;	
 			if(jQuery('form.wc-block-checkout__form').length > 0){
-				var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html();
-				var total_price = id_of_div.split(POSTerminal.currency_sym)[1];
-				// var total = total.substring(1, total.length);
-				// var total_price = total.toString();
+				// WSSS-416: checkout localizes squaretpay_params only (POSTerminal is admin-only).
+				var total_price = String(squaretpay_params.order_total || '0');
 			}else{
 				var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').html();
 				var total = id_of_div.split("span")[2];
@@ -85,9 +88,8 @@ jQuery(document).ready(function() {
 			var formData = {
 				action: 'terminal_pay_process',
 				nonce: squaretpay_params.nonce,
-				token: squaretpay_params.access_token,
 				country_code: squaretpay_params.country_code,
-				currency_code: squaretpay_params.currency_cod,
+				currency_code: squaretpay_params.currency_code,
 				location_id: squaretpay_params.location_id,
 				square_pay_nonce: squaretpay_params.square_pay_nonce,
 				total_price: total_price,
@@ -105,7 +107,6 @@ jQuery(document).ready(function() {
 					// jQuery('#spinner').show();
 					var formData = {
 						action: 'terminal_pay_process_checkout',
-						token: squaretpay_params.access_token,
 						square_pay_nonce: squaretpay_params.square_pay_nonce,
 					}
 					var  aj_status = 0;
@@ -115,27 +116,22 @@ jQuery(document).ready(function() {
 							'url' : squaretpay_params.ajax_url,
 							'type' : 'GET',
 							'data' : formData,
-							'success' : function(response) {
-									var response_json = JSON.parse(response);
-									console.log('response_jsonresponse_json');
-									console.log(response_json);
-									const cardButton = document.getElementById('place_order');
+						'success' : function(response) {
+								var response_json = JSON.parse(response);
+								const cardButton = document.getElementById('place_order');
 									/* cardButton.addEventListener('click', function (event) {
 										alert('sssssss');
 									}) */
 									
-									if(response_json.result_info.checkout.status == 'COMPLETED'){
-										clearInterval(refreshId);
-										console.log(response_json.result_info.checkout);
-										jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_checkout_status" name="term_checkout_status" value="' + response_json.result_info.checkout.status + '" />' );
+								if(response_json.result_info.checkout.status == 'COMPLETED'){
+									clearInterval(refreshId);
+									jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_checkout_status" name="term_checkout_status" value="' + response_json.result_info.checkout.status + '" />' );
 										jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_checkout_app_id" name="term_checkout_app_id" value="' + response_json.result_info.checkout.app_id + '" />' );
 										jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_checkout_id" name="term_checkout_id" value="' + response_json.result_info.checkout.id + '" />' );
-										jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_customer_id" name="term_customer_id" value="' + response_json.result_info.checkout.customer_id + '" />' );
-										console.log('response');
-										completepym(refreshId);
-									}else{
-										console.error('Card id error: ', response_json.result_info.checkout.status);
-										this.disabled = false;	
+									jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review').append( '<input type="hidden" class="term_customer_id" name="term_customer_id" value="' + response_json.result_info.checkout.customer_id + '" />' );
+								completepym(refreshId);
+								}else{
+									this.disabled = false;
 										aj_status = 0;
 									}
 								},

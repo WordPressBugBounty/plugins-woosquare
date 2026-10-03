@@ -79,6 +79,10 @@
 
 	function getitems(myAjax,action,customparams,page,limit)
 	{
+		// Disable category checkboxes while loading products
+		if (page == 1) {
+			jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', true );
+		}
 
 		jQuery.ajax(
 			{
@@ -93,9 +97,13 @@
 						if (response.error) {
 							jQuery( "#sync-content, #sync-loader" ).hide();
 							jQuery( "#sync-error" ).show().html( response.error );
+							// Re-enable category checkboxes on error
+							jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', false );
 							endPopup();
 							return;
 						} else if ( ! response.data) {
+							// Re-enable category checkboxes if no data
+							jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', false );
 							return;
 						}
 						// response = response.data;
@@ -108,9 +116,36 @@
 						jQuery( "#sync-content,.cd-buttons.start" ).show();
 						if (page != 1) {
 							var filtered = jQuery( jQuery.parseHTML( response.data ) );
-							var filte    = filtered.find( '#sync-product' ).html();
-							// console.log( filtered.find('.woo_square_product').length() );
-							jQuery( filte ).appendTo( "#sync-product" );
+							// Only append product items, not the headings
+							var $responseSyncProduct = filtered.find( '#sync-product' );
+							
+							// Append items from .square-create if it exists
+							var $createDiv = $responseSyncProduct.find( '.square-create' );
+							if ( $createDiv.length > 0 && jQuery( '#sync-product .square-create' ).length > 0 ) {
+								var createItems = $createDiv.html();
+								if ( createItems ) {
+									jQuery( createItems ).appendTo( '#sync-product .square-create' );
+								}
+							}
+							
+							// Append items from .square-update if it exists
+							var $updateDiv = $responseSyncProduct.find( '.square-update' );
+							if ( $updateDiv.length > 0 && jQuery( '#sync-product .square-update' ).length > 0 ) {
+								var updateItems = $updateDiv.html();
+								if ( updateItems ) {
+									jQuery( updateItems ).appendTo( '#sync-product .square-update' );
+								}
+							}
+							
+							// Append items from .square-delete if it exists
+							var $deleteDiv = $responseSyncProduct.find( '.square-delete' );
+							if ( $deleteDiv.length > 0 && jQuery( '#sync-product .square-delete' ).length > 0 ) {
+								var deleteItems = $deleteDiv.html();
+								if ( deleteItems ) {
+									jQuery( deleteItems ).appendTo( '#sync-product .square-delete' );
+								}
+							}
+							
 							jQuery( ".cd-popup-container-loading p" ).html( response.count + '/' + response.totalitems );
 						}
 						if (action == 'optionsaved') {
@@ -118,15 +153,20 @@
 							var btntxt = 'UPDATE';
 							jQuery( '#start-process' ).text( btntxt ).delay( 3000 );
 							jQuery( '#sync-product h3' ).hide();
+							// Preference popup: keep full product list + PHP restored ticks.
+							jQuery( '#sync-product .square-action' ).show();
 							// jQuery('#sync-category h3').hide();
 						} else {
 							var cusurl = '';
 							var btntxt = 'Start Synchronization';
 							jQuery( '#start-process' ).text( btntxt ).delay( 3000 );
+							
 						}
 						if (page < response.totalPages) {
 							jQuery( '#start-process' ).text( 'PRODUCTS LOADING...' ).delay( 3000 );
 							jQuery( '#start-process' ).attr( 'disabled', true );
+							// Keep category checkboxes disabled while loading
+							jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', true );
 							page         = page + 1;
 							customparams = '';
 							customparams = cusurl;
@@ -136,31 +176,19 @@
 						} else {
 							jQuery( '#start-process' ).text( btntxt ).delay( 3000 );
 							jQuery( '#start-process' ).attr( 'disabled', false );
+							// Re-enable category checkboxes when loading is complete
+							jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', false );
 						}
 					}
-					/*  jQuery('.check:button').toggle(function(){
-					var chfrom = jQuery(this).attr('class').split(' ');
-					if('extpro' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_product"]:checkbox').attr('checked','checked');
-					jQuery(this).val('Uncheck All')
-					} else if('extcat' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_category"]:checkbox').attr('checked','checked');
-					jQuery(this).val('Uncheck All')
-					}
-					},function(){
-					var chfrom = jQuery(this).attr('class').split(' ');
-					if('extpro' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_product"]:checkbox').removeAttr('checked');
-					jQuery(this).val('Check All');
-					} else if('extcat' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_category"]:checkbox').removeAttr('checked');
-					jQuery(this).val('Check All');
-					}
-
-					});*/
+					
+				},
+				error: function() {
+					// Re-enable category checkboxes on AJAX error
+					jQuery( '#sync-category input:checkbox[name="woo_square_category"]' ).prop( 'disabled', false );
 				}
 			}
 		);
+    	
 	}
 	function show_square_popup(action)
 	{
@@ -199,36 +227,25 @@
 						if (action == 'optionsaved') {
 							jQuery( '#start-process' ).text( 'UPDATE' ).delay( 3000 );
 							jQuery( '#sync-product h3' ).hide();
+							// Preference popup: show all products; PHP already set saved ticks.
+							// Do NOT call changes_in_category() — it hides non-category products.
+							jQuery( '#sync-product .square-action' ).show();
 							// jQuery('#sync-category h3').hide();
 						} else {
 							jQuery( '#start-process' ).text( 'Start Synchronization' ).delay( 3000 );
+							setTimeout(function(){
+								if(jQuery('.category-toggle').prop('checked')){
+									changes_in_category();
+								}
+							}, 600);
 						}
 
 					}
-					/*         jQuery('.check:button').toggle(function(){
-					var chfrom = jQuery(this).attr('class').split(' ');
-					if('extpro' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_product"]:checkbox').attr('checked','checked');
-					jQuery(this).val('Uncheck All')
-					} else if('extcat' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_category"]:checkbox').attr('checked','checked');
-					jQuery(this).val('Uncheck All')
-					}
-					},function(){
-					var chfrom = jQuery(this).attr('class').split(' ');
-					if('extpro' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_product"]:checkbox').removeAttr('checked');
-					jQuery(this).val('Check All');
-					} else if('extcat' == chfrom[7]){
-					jQuery('.square-action input[name*="woo_square_category"]:checkbox').removeAttr('checked');
-					jQuery(this).val('Check All');
-					}
-
-					});*/
-
 				}
 			}
 		);
+	
+		
 	}
 
 	var sync      = [];
@@ -238,7 +255,7 @@
 
 	function startManualSync(caller)
 	{
-
+ 
 		processPopup();
 		// if(caller == 'listsaved_square' || caller == 'listsaved_woo'){
 		var sync      = [];
@@ -247,7 +264,9 @@
 		// }
 		jQuery( '#sync-product input:checkbox[name="woo_square_product"]:checked' ).each(
 			function () {
-					sync.product.push( jQuery( this ).val() );
+					if (jQuery(this).is(':visible')) {
+						sync.product.push(jQuery(this).val());
+					}
 			}
 		);
 		jQuery( '#sync-category input:checkbox[name="woo_square_category"]:checked' ).each(
@@ -257,15 +276,19 @@
 		);
 
 		if (caller == 'listsaved_square' || caller == 'listsaved_woo') {
+		    var checkbox = document.querySelector('.category-toggle');
+            var checkboxChecked = checkbox.checked;
+
 			var action   = 'listsaved';
 			var method   = "POST";
 			var ajAxdata = {
-				action: action ,
-				products: JSON.stringify( sync.product ),
-				categories: JSON.stringify( sync.category ),
-				saveto: caller == 'listsaved_square' ? 'square' : 'wooco',
-				ajaxnonce: myAjax.ajaxnonce,
-			};
+                action: action,
+                products: JSON.stringify(sync.product),
+                categories: JSON.stringify(sync.category),
+                saveto: caller == 'listsaved_square' ? 'square' : 'wooco',
+                ajaxnonce: myAjax.ajaxnonce,
+                categoryChecked: checkboxChecked // Add the checkbox checked status (true/false)
+            };
 		} else {
 			var action   = caller == 'woo' ? 'woo_to_square' : 'square_to_woo';
 			var method   = "GET";
@@ -326,7 +349,7 @@
 				url: myAjax.ajaxurl,
 				data: 'action=' + action + '&id=' + currentProdId + '&ajaxnonce='+myAjax.ajaxnonce,
 				success: function (response) {
-					if (response == 1) {
+					if ( String( response ).trim() == '1' ) {
 						if (target == 'category') {
 							jQuery( '#sync-' + target + ' input:checkbox[name="woo_square_' + target + '"].woo_square_category[value="' + currentProdId + '"]' ).parent( 'div' ).append( '<span class="dashicons dashicons-yes right"></span>' ).addClass( 'sync-success' );
 
@@ -432,19 +455,99 @@
 
 	function deleteManualSyncTransients(caller)
 	{
-		if(caller == 'woo'){
-			jQuery.ajax(
-				{
-					type: "POST",
-					url: myAjax.ajaxurl,
-					data: 'action=delete_manual_' + caller + '_sync_transients',
-					success: function (html) {
-						// endPopup();
+		if (typeof myAjax === 'undefined') {
+			return;
+		}
+		jQuery.ajax(
+			{
+				type: "POST",
+				url: myAjax.ajaxurl,
+				data: {
+					action: 'delete_manual_woo_sync_transients',
+					ajaxnonce: myAjax.ajaxnonce,
+				},
+			}
+		);
+	}
+
+	function clearSquareCatalogCacheButton()
+	{
+		if (typeof myAjax === 'undefined') {
+			return;
+		}
+		var $btn = jQuery( '#woosquare-clear-square-catalog-cache' );
+		if ( ! $btn.length ) {
+			return;
+		}
+		$btn.on(
+			'click',
+			function (e) {
+				e.preventDefault();
+				$btn.prop( 'disabled', true );
+				jQuery.ajax(
+					{
+						type: 'POST',
+						url: myAjax.ajaxurl,
+						data: {
+							action: 'delete_manual_woo_sync_transients',
+							ajaxnonce: myAjax.ajaxnonce,
+						},
 					}
-				}
-			);
+				).done(
+					function (resp) {
+						var ok = (resp === '1' || (typeof resp === 'string' && resp.trim() === '1'));
+						if (ok) {
+							window.alert( 'Catalog cache cleared. Open the sync popup again for a fresh list.');
+						} else {
+							window.alert( 'Could not clear cache. Please try again.');
+						}
+					}
+				).fail(
+					function () {
+						window.alert( 'Request failed. Please try again.');
+					}
+				).always(
+					function () {
+						$btn.prop( 'disabled', false );
+					}
+				);
+			}
+		);
+	}
+ 
+  
+	function toggleUpdateAction() {    
+		// Sirf Square to WooCommerce direction mein hi apply karo
+		var isSquareToWoo = (typeof sync !== 'undefined' && sync.caller === 'square');
+		
+		if (isSquareToWoo) {
+			// Square to WooCommerce: category toggle checked ho to show, unchecked ho to hide
+			if (jQuery('.category-toggle').is(':checked')) {
+				jQuery('.square-action.update_products_action').show();
+			} else {
+				jQuery('.square-action.update_products_action').hide();
+			}
+		} else {
+			// WooCommerce to Square: default behavior (always show)
+			jQuery('.square-action.update_products_action').show();
 		}
 	}
+
+	// Page load pe run karo
+	toggleUpdateAction();
+
+	// Checkbox toggle hone pe run karo
+	jQuery(document).on('change', '.category-toggle', function () {
+		toggleUpdateAction();
+	});
+
+	// Har AJAX complete hone ke baad bhi run karo
+	jQuery(document).ajaxComplete(function (event, xhr, settings) {
+		// Agar aapko sirf ek specific action pe run karna ho:
+		if (settings.data && settings.data.indexOf("action=get_data_by_category") !== -1) {
+			toggleUpdateAction();
+		}
+	});
 	function terminateManualSync(caller)
 	{
 		jQuery.ajax(
@@ -481,7 +584,6 @@
 				},
 				error: function (e) {
 					jQuery( '#overlay' ).hide();
-					console.log( e );
 				},
 				success: function (result) {
 					// Cached selectors
@@ -489,13 +591,26 @@
 					var $syncProductCheckboxes = jQuery( '#sync-product input:checkbox[name="woo_square_product"]' );
 					var $squareAction          = jQuery( '.square-action input[name="woo_square_product"]' );
 					var chunkSize              = 10;
+					// Check if Square to WooCommerce direction
+					var isSquareToWoo = (caller === 'square' || (typeof sync !== 'undefined' && sync.caller === 'square'));
+					
 					// Hide overlay
 					$overlay.hide();
 					$squareAction.prop( "checked", false ).removeAttr( 'checked' );
+					
+					// Square to WooCommerce direction mein category toggle checked ho to update_products_action show karo
+					if (isSquareToWoo && jQuery('.category-toggle').is(':checked')) {
+						jQuery( '#sync-product .update_products_action' ).show();
+					}
+					
 					if (result) {
 						result = JSON.parse( result );
 						if (Array.isArray( result )) {
 								// Process result array in chunks
+								
+							let checkedItems = result[result.length - 1] && result[result.length - 1].checked_items ? result[result.length - 1].checked_items : []; // Get the checked_items array with fallback
+                            let lastCheckedItem = Array.isArray(checkedItems) && checkedItems.length > 0 ? checkedItems[checkedItems.length - 1] : null;
+							
 							processArrayInChunks(
 								result,
 								chunkSize,
@@ -505,14 +620,19 @@
 											$syncProductCheckboxes.each(
 												function () {
 													var $this = jQuery( this );
-													
 													if ($this.val() == number) {
 														jQuery( '#square-action-' + number ).show();
-														$this.prop( "checked", true ).attr( 'checked', 'checked' );
-														$squareAction.filter( '.modifier_end' ).prop( 'checked', true );
+														if (Array.isArray(checkedItems) && checkedItems.includes(number.toString())) {
+														    jQuery( '#square-action-'+number).find('input[type="checkbox"]').prop('checked', true);
+														}
+														//$this.prop( "checked", true ).attr( 'checked', 'checked' );
+														//$squareAction.filter( '.modifier_end' ).prop( 'checked', true );
 													} else if ($this.val() == 'update_products') {
-														jQuery( '#sync-product .update_products_action' ).show();
-														$this.prop( "checked", true ).attr( 'checked', 'checked' );
+														// Sirf Square to WooCommerce direction mein hi show karo
+														if (isSquareToWoo && jQuery('.category-toggle').is(':checked')) {
+															jQuery( '#sync-product .update_products_action' ).show();
+														}
+														//$this.prop( "checked", true ).attr( 'checked', 'checked' );
 													} 
 												}
 											);
@@ -520,6 +640,11 @@
 									);
 								}
 							);
+							
+							// Final check: Square to WooCommerce direction mein category toggle checked ho to update_products_action show karo
+							if (isSquareToWoo && jQuery('.category-toggle').is(':checked')) {
+								jQuery( '#sync-product .update_products_action' ).show();
+							}
 						}
 					} else {
 						jQuery( '#sync-product .square-action' ).show();
@@ -538,7 +663,8 @@
 				selected_categories.push( jQuery( this ).val() );
 			}
 		);
-		if (jQuery( '.category-toggle' ).val() == 1) {
+		
+		if (jQuery('.category-toggle').prop('checked')) {
 			jQuery( '#overlay' ).show();
 			var caller = jQuery( '#start-process' ).data( "caller" );
 			get_data_by_category( selected_categories, caller );
@@ -546,8 +672,10 @@
 	}
 
 	// Bind events to the page
-	jQuery( document ).ready(
+		jQuery( document ).ready(
 		function (jQuery) {
+
+			clearSquareCatalogCacheButton();
 
 			jQuery( "#manual_sync_squtowoo_btn" ).on( "click", {name: 'squtowoo'}, show_square_popup );
 			jQuery( "#manual_sync_wootosqu_btn" ).on( "click", {name: 'wootosqu'}, show_woo_popup );

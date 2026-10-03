@@ -692,7 +692,8 @@ class Square {
 				break;
 			default:
 				if ( 'wotosq' === $direc ) {
-					$total = round( $total, 2 ) * 100; // In cents.
+					$total = round( $total, 2 );
+					$total = (int) round( $total * 100, 0 );
 				} elseif ( 'sqtowo' === $direc ) {
 					$total = round( $total, 2 ) / 100; // In cents.
 				}

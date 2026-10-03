@@ -13,6 +13,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
+// Load the parent class if not already loaded.
+if ( ! class_exists( 'WooSquare_Client' ) ) {
+	require_once __DIR__ . '/../product-sync/_inc/class-woosquare-client.php';
+}
+
 /**
  * WooSquare_Payments_Connect Class
  *

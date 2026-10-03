@@ -35,14 +35,16 @@
 		</div>
 
 		<div class="welcome-panel ext-panel <?php echo esc_html( isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '' ); ?>-1"> <?php // phpcs:ignore ?>
-			<h1><svg height="20px" viewBox="0 0 512 511" width="20px" xmlns="http://www.w3.org/2000/svg">
+			<h1>
+				<svg height="20px" viewBox="0 0 512 511" width="20px" xmlns="http://www.w3.org/2000/svg">
 					<path
 						d="m405.332031 256.484375c-11.796875 0-21.332031 9.558594-21.332031 21.332031v170.667969c0 11.753906-9.558594 21.332031-21.332031 21.332031h-298.667969c-11.777344 0-21.332031-9.578125-21.332031-21.332031v-298.667969c0-11.753906 9.554687-21.332031 21.332031-21.332031h170.667969c11.796875 0 21.332031-9.558594 21.332031-21.332031 0-11.777344-9.535156-21.335938-21.332031-21.335938h-170.667969c-35.285156 0-64 28.714844-64 64v298.667969c0 35.285156 28.714844 64 64 64h298.667969c35.285156 0 64-28.714844 64-64v-170.667969c0-11.796875-9.539063-21.332031-21.335938-21.332031zm0 0" />
 					<path
 						d="m200.019531 237.050781c-1.492187 1.492188-2.496093 3.390625-2.921875 5.4375l-15.082031 75.4375c-.703125 3.496094.40625 7.101563 2.921875 9.640625 2.027344 2.027344 4.757812 3.113282 7.554688 3.113282.679687 0 1.386718-.0625 2.089843-.210938l75.414063-15.082031c2.089844-.429688 3.988281-1.429688 5.460937-2.925781l168.789063-168.789063-75.414063-75.410156zm0 0" />
 					<path
 						d="m496.382812 16.101562c-20.796874-20.800781-54.632812-20.800781-75.414062 0l-29.523438 29.523438 75.414063 75.414062 29.523437-29.527343c10.070313-10.046875 15.617188-23.445313 15.617188-37.695313s-5.546875-27.648437-15.617188-37.714844zm0 0" />
-				</svg> Synchronization of Products Settings</h1>
+				</svg> Synchronization of Products Settings
+			</h1>
 
 		<?php if ( $currency_mismatch_flag ) { ?>
 			<br />
@@ -241,7 +243,7 @@
 
 							<div class="elementBlock">
 								<label><input type="checkbox"
-										<?php echo ( get_option( 'disable_auto_delete' ) === '1' ) ? 'checked' : ''; ?> value="1"
+										<?php echo ( (string) get_option( 'disable_auto_delete' ) === '1' ) ? 'checked' : ''; ?> value="1"
 										name="disable_auto_delete"> Yes </label>
 							</div>
 						</li>
@@ -251,11 +253,12 @@
 							<strong>Enable WooCommerce description synchronization with html ?</strong>
 							<div class="elementBlock">
 								<label><input type="checkbox"
-										<?php echo ( get_option( 'html_sync_des' ) === '1' ) ? 'checked' : ''; ?> value="1"
+										<?php echo ( (string) get_option( 'html_sync_des' ) === '1' ) ? 'checked' : ''; ?> value="1"
 										name="html_sync_des"> Yes </label>
 							</div>
 						</li>
 						<?php if ( 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) { ?>
+							<?php if ( version_compare( WOOSQUARE_VERSION, '4.7.1', '<' ) ) { ?>
 						<li>
 							<strong><?php echo esc_html__( 'Enable new variation format ?', 'woosquare' ); ?></strong>
 							<p class="description ext">By enabling this option, you can create variations in Square using options (eg: color and size), see the <a href="https://apiexperts.io/documentation/woosquare-plus/">documentation</a>.</p>
@@ -265,6 +268,7 @@
 										name="enable_woosquare_new_variation_format"> <?php echo esc_html__( 'Yes', 'woosquare' ); ?> </label>
 							</div>
 						</li>
+						<?php } ?>
 						<li>
 							<strong>Enable Stock sync to Woocommerce via webhook ?</strong>
 							<div class="elementBlock">
@@ -272,7 +276,7 @@
 										<?php echo ( get_option( 'woosquare_stocksync_webhook' ) === '1' ) ? 'checked' : ''; ?> value="1"
 										name="woosquare_stocksync_webhook"> Yes </label>
 							</div><br>
-							<div class="squ-order-sync-description" style="padding:10px">
+							<div class="squ-order-sync-description" style="padding:10px 10px 0px 10px">
 								<p>
 									For instant Square items stock sync to WooCommerce stock you need to follow below instruction.
 								</p>
@@ -303,9 +307,21 @@
 								</p>
 
 							</div>
+
 						</li>
 						<?php } ?>
-					
+						<li class="" style="padding: 15px 0px 7px 0px !important;">
+							<strong>Click to sync and load the latest products from your Square account.</strong>
+							<p class="description ext">Use this if you’ve recently added or updated products in Square and don’t see those changes in Product Sync Pop-up.</p>
+							<p class="description" style="margin: 10px 0 10px 0;">
+								<button type="button" id="woosquare-clear-square-catalog-cache" class="button button-secondary" style="background: #26c6da; color: white; font-size: 12px; font-weight: 500; border: none; border-radius: 5px; box-shadow: 3px 2px 2px lightblue;">
+									<?php esc_html_e( 'Refresh Products from Square', 'woosquare' ); ?>
+								</button><br>
+								<span class="description" style="margin: 5px 0px 0px 0px;display: block;">
+									<?php esc_html_e( 'Note that the first refresh may take a little longer to load products.', 'woosquare' ); ?>
+								</span>
+							</p>
+						</li>
 					</ul>
 
 				</div>

@@ -22,10 +22,10 @@ function square_settings_page() {
 	if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'GET' === $_SERVER['REQUEST_METHOD'] && isset( $_GET['terminate_sync'] ) ) {
 
 		// clear session variables if exists.
-		$square_to_woo = get_transient( 'square_to_woo' );
+		$square_to_woo = woo_square_get_square_to_woo();
 		$woo_to_square = get_transient( 'woo_to_square' );
 		if ( isset( $square_to_woo['square_to_woo'] ) ) {
-			delete_transient( 'square_to_woo' );
+			woo_square_delete_square_to_woo();
 		}
 		if ( isset( $woo_to_square['woo_to_square'] ) ) {
 			delete_transient( 'woo_to_square' );
@@ -73,9 +73,15 @@ function square_settings_page() {
 			} else {
 				wp_clear_scheduled_hook( 'auto_sync_cron_job_hook' );
 			}
-			update_option( 'woo_square_merging_option', isset( $_POST['woo_square_merging_option'] ) ? sanitize_text_field( wp_unslash( $_POST['woo_square_merging_option'] ) ) : null );
-			update_option( 'woo_square_sync_preference', isset( $_POST['woo_square_sync_preference'] ) ? sanitize_text_field( wp_unslash( $_POST['woo_square_sync_preference'] ) ) : null );
-			update_option( 'sync_on_add_edit', isset( $_POST['sync_on_add_edit'] ) ? sanitize_text_field( wp_unslash( $_POST['sync_on_add_edit'] ) ) : null );
+			if ( isset( $_POST['woo_square_merging_option'] ) ) {
+				update_option( 'woo_square_merging_option', sanitize_text_field( wp_unslash( $_POST['woo_square_merging_option'] ) ) );
+			}
+			if ( isset( $_POST['woo_square_sync_preference'] ) ) {
+				update_option( 'woo_square_sync_preference', sanitize_text_field( wp_unslash( $_POST['woo_square_sync_preference'] ) ) );
+			}
+			if ( isset( $_POST['sync_on_add_edit'] ) ) {
+				update_option( 'sync_on_add_edit', sanitize_text_field( wp_unslash( $_POST['sync_on_add_edit'] ) ) );
+			}
 			update_option( 'disable_auto_delete', isset( $_POST['disable_auto_delete'] ) ? sanitize_text_field( wp_unslash( $_POST['disable_auto_delete'] ) ) : 0 );
 			if ( ! empty( $_POST['woosquare_pro_edit_fields'] ) ) {
 				$edit_fields = array_map( 'sanitize_text_field', wp_unslash( $_POST['woosquare_pro_edit_fields'] ) );
@@ -93,9 +99,13 @@ function square_settings_page() {
 
 			}
 
-			update_option( 'html_sync_des', isset( $_POST['html_sync_des'] ) ? sanitize_text_field( wp_unslash( $_POST['html_sync_des'] ) ) : null );
-			update_option( 'enable_woosquare_new_variation_format', isset( $_POST['enable_woosquare_new_variation_format'] ) ? sanitize_text_field( wp_unslash( $_POST['enable_woosquare_new_variation_format'] ) ) : null );
-			update_option( 'woosquare_stocksync_webhook', isset( $_POST['woosquare_stocksync_webhook'] ) ? sanitize_text_field( wp_unslash( $_POST['woosquare_stocksync_webhook'] ) ) : null );
+			update_option( 'html_sync_des', isset( $_POST['html_sync_des'] ) ? sanitize_text_field( wp_unslash( $_POST['html_sync_des'] ) ) : 0 );
+			if ( isset( $_POST['enable_woosquare_new_variation_format'] ) || ( defined( 'WOOSQU_PLUS_LABEL' ) && 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) ) {
+				update_option( 'enable_woosquare_new_variation_format', isset( $_POST['enable_woosquare_new_variation_format'] ) ? sanitize_text_field( wp_unslash( $_POST['enable_woosquare_new_variation_format'] ) ) : 0 );
+			}
+			if ( isset( $_POST['woosquare_stocksync_webhook'] ) || ( defined( 'WOOSQU_PLUS_LABEL' ) && 'WC Shop Sync Pro' === WOOSQU_PLUS_LABEL ) ) {
+				update_option( 'woosquare_stocksync_webhook', isset( $_POST['woosquare_stocksync_webhook'] ) ? sanitize_text_field( wp_unslash( $_POST['woosquare_stocksync_webhook'] ) ) : 0 );
+			}
 			$success_message = 'Settings updated successfully!';
 		}
 	}

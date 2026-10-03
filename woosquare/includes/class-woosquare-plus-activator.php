@@ -97,7 +97,7 @@ class Woosquare_Plus_Activator {
 				'module_title'         => __( 'Order Synchronization', 'woosquare' ),
 				'module_short_excerpt' => __( 'Automate the process to synchronize orders between WooCommerce and Square.', 'woosquare' ),
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#order-synchronization-8' ),
-				'module_slug'          => 'order-synchronization-8',
+				'module_slug'          => 'order-synchronization',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/bDzRLARmRzQ' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['sales_sync']['module_activate'] ) ? true : false,
 				'module_menu_details'  => array(
@@ -115,7 +115,7 @@ class Woosquare_Plus_Activator {
 				'module_title'         => __( 'Customers Synchronization', 'woosquare' ),
 				'module_short_excerpt' => __( 'Easily keep your Square and WooCommerce customers in sync, and link them to the orders appearing in WooCommerce from Square.', 'woosquare' ),
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#customer-synchronisation-6' ),
-				'module_slug'          => 'customer-synchronisation-6',
+				'module_slug'          => 'customer-synchronization',
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['customer_sync']['module_activate'] ) ? true : false,
 				'module_menu_details'  => array(
 					'menu_title'        => __( 'Customers Sync', 'woosquare' ),
@@ -133,7 +133,7 @@ class Woosquare_Plus_Activator {
 				'module_title'         => __( 'Transaction notes', 'woosquare' ),
 				'module_short_excerpt' => __( 'Manage information to be displayed in Square transaction notes for the payments made at WooCommerce checkout.', 'woosquare' ),
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#transaction-notes-7' ),
-				'module_slug'          => 'transaction-notes-7',
+				'module_slug'          => 'transaction-notes',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/s2inxilrncc' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_transaction_addon']['module_activate'] ) ? true : false,
 				'module_menu_details'  => array(
@@ -151,7 +151,7 @@ class Woosquare_Plus_Activator {
 				'module_title'         => __( 'Save cards at checkout', 'woosquare' ),
 				'module_short_excerpt' => __( 'Users can save their cards at the time of checkout in WooCommerce, and can use them in future easily.', 'woosquare' ),
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#save-cards-at-checkout-6' ),
-				'module_slug'          => 'save-cards-at-checkout-6',
+				'module_slug'          => 'save-cards-at-checkout',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/YVnjPEUWg8U' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_card_on_file']['module_activate'] ) ? true : false,
 				'module_menu_details'  => array(
@@ -164,13 +164,30 @@ class Woosquare_Plus_Activator {
 					'function_callback' => 'square_card_sync_page',
 				),
 			),
-
+			'woosquare_loyalty'           => array(
+				'module_img'           => esc_url( plugin_dir_url( __FILE__ ) . '../admin/img/loyaltyyncnew.png' ),
+				'module_title'         => __( 'Square loyalty', 'woosquare' ),
+				'module_short_excerpt' => __( 'Square loyalty in WC Shop Sync allow you to sell items that are customizable or offer additional choices.', 'woosquare' ),
+				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#square-loyalty-4' ),
+				'module_slug'          => 'square-loyalty',
+				'module_video'         => esc_url( 'https://www.youtube.com/embed/XnC0cOoWx-k' ),
+				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_loyalty']['module_activate'] ) ? true : false,
+				'module_menu_details'  => array(
+					'menu_title'        => __( 'Square loyalty', 'woosquare' ),
+					'parent_slug'       => 'square-settings',
+					'page_title'        => __( 'Square loyalty', 'woosquare' ),
+					'capability'        => 'manage_options',
+					'menu_slug'         => 'square-loyalty',
+					'tab_html_class'    => 'fa fa-credit-card',
+					'function_callback' => 'square_loyalty_sync_page',
+				),
+			),
 			'woosquare_modifiers'         => array(
 				'module_img'           => esc_url( plugin_dir_url( __FILE__ ) . '../admin/img/modifiersyncnew.png' ),
 				'module_title'         => __( 'Square Modifiers', 'woosquare' ),
 				'module_short_excerpt' => __( 'Square Modifiers in WC Shop Sync allow you to sell items that are customizable or offer additional choices.', 'woosquare' ),
 				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#square-modifiers-4' ),
-				'module_slug'          => 'square-modifiers-4',
+				'module_slug'          => 'square-modifiers',
 				'module_video'         => esc_url( 'https://www.youtube.com/embed/XnC0cOoWx-k' ),
 				'module_activate'      => ! empty( $activate_modules_woosquare_plus['woosquare_modifiers']['module_activate'] ) ? true : false,
 				'module_menu_details'  => array(
@@ -183,6 +200,24 @@ class Woosquare_Plus_Activator {
 					'function_callback' => 'square_modifiers_sync_page',
 				),
 			),
+			'square_connection'           => array(
+				'module_img'           => esc_url( plugin_dir_url( __FILE__ ) . '../admin/img/square-connections.png' ),
+				'module_title'         => __( 'Square Connection', 'woosquare' ),
+				'module_short_excerpt' => __( 'Track API activity with Square Connection Logs and receive Email Alerts for any disconnections, ensuring smooth payment processing.', 'woosquare' ),
+				'module_redirect'      => esc_url( 'https://apiexperts.io/documentation/woosquare-plus/?utm_source=plugin&utm_medium=addons#square-connection' ),
+				'module_slug'          => 'square-connection',
+				'module_video'         => esc_url( 'https://www.youtube.com/embed/-uYI_a-k9Eo' ),
+				'module_activate'      => ! empty( $activate_modules_woosquare_plus['square_connection']['module_activate'] ) ? true : false,
+				'module_menu_details'  => array(
+					'menu_title'        => __( 'Square Connection', 'woosquare' ),
+					'parent_slug'       => 'square-settings',
+					'page_title'        => __( 'Square Connection', 'woosquare' ),
+					'capability'        => 'manage_options',
+					'menu_slug'         => 'woosquare-square-connection',
+					'tab_html_class'    => 'fa fa-link',
+					'function_callback' => 'woosquare_square_connection_page',
+				),
+			),
 		);
 
 		$path         = plugin_dir_path( __FILE__ );
@@ -190,20 +225,47 @@ class Woosquare_Plus_Activator {
 		$plugins_path = substr( $path, $plugins_pos );
 		// Split the path into parts using the directory separator.
 		$path_parts = explode( DIRECTORY_SEPARATOR, $plugins_path );
+
 		if ( ! function_exists( 'get_plugin_data' ) ) {
-			include_once ABSPATH . 'wp-admin/includes/plugin.php';
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
-		$plugin_data = get_plugin_data( ABSPATH . 'wp-content/plugins/' . $path_parts[1] . '/woocommerce-square-integration.php' );
+
+		$file = WP_PLUGIN_DIR . '/' . $path_parts[1] . '/woocommerce-square-integration.php';
+
+		if ( file_exists( $file ) ) {
+			$plugin_data = get_plugin_data( $file );
+		}
+
 		if ( 'WC Shop Sync - Connect Square with WooCommerce' === $plugin_data['Name'] ) {
 			// free WordPress org.
-			$plugin_modules['items_sync']['is_premium']                  = false;
-			$plugin_modules['woosquare_payment']['is_premium']           = false;
-			$plugin_modules['items_sync_log']['is_premium']              = false;
-			$plugin_modules['woosquare_modifiers']['is_premium']         = true;
-			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
-			$plugin_modules['customer_sync']['is_premium']               = true;
-			$plugin_modules['woosquare_transaction_addon']['is_premium'] = true;
-			$plugin_modules['sales_sync']['is_premium']                  = true;
+			// Check if module files exist (for free version compatibility).
+			$base_path = plugin_dir_path( __FILE__ ) . '../admin/modules/';
+
+			$items_sync_path                            = $base_path . 'product-sync/product-sync.php';
+			$plugin_modules['items_sync']['is_premium'] = ! file_exists( $items_sync_path );
+
+			$payment_module_path                               = $base_path . 'square-payments/class-woosquare-payments.php';
+			$plugin_modules['woosquare_payment']['is_premium'] = ! file_exists( $payment_module_path );
+
+			$items_sync_log_path                            = $base_path . 'square-sync-logs/class-woosquare-sync-logs.php';
+			$plugin_modules['items_sync_log']['is_premium'] = ! file_exists( $items_sync_log_path );
+
+			$loyalty_module_path                               = $base_path . 'woosquare-loyalty/wcs-loyalty.php';
+			$plugin_modules['woosquare_loyalty']['is_premium'] = ! file_exists( $loyalty_module_path );
+
+			$modifiers_module_path                               = $base_path . 'woosquare-modifier/class-woosquare-modifier-admin.php';
+			$plugin_modules['woosquare_modifiers']['is_premium'] = ! file_exists( $modifiers_module_path );
+
+			$customer_module_path                                   = $base_path . 'square-customers/customersync-integration.php';
+			$plugin_modules['woosquare_card_on_file']['is_premium'] = ! file_exists( $customer_module_path );
+			$plugin_modules['customer_sync']['is_premium']          = ! file_exists( $customer_module_path );
+
+			$transaction_module_path                                     = $base_path . 'transaction-notes/transaction-notes.php';
+			$plugin_modules['woosquare_transaction_addon']['is_premium'] = ! file_exists( $transaction_module_path );
+
+			$sales_sync_path                            = $base_path . 'order-sync/order-sync.php';
+			$plugin_modules['sales_sync']['is_premium'] = ! file_exists( $sales_sync_path );
+
 			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
 				define( 'WOOSQU_PLUS_LABEL', 'WC Shop Sync Settings' );
 			}
@@ -218,6 +280,8 @@ class Woosquare_Plus_Activator {
 			$plugin_modules['customer_sync']['is_premium']               = false;
 			$plugin_modules['woosquare_transaction_addon']['is_premium'] = false;
 			$plugin_modules['sales_sync']['is_premium']                  = false;
+			$plugin_modules['woosquare_loyalty']['is_premium']           = false;
+			$plugin_modules['square_connection']['is_premium']           = false;
 			if ( ! defined( 'WOOSQU_PLUS_LABEL' ) ) {
 				define( 'WOOSQU_PLUS_LABEL', 'WC Shop Sync Pro' );
 			}
@@ -230,6 +294,7 @@ class Woosquare_Plus_Activator {
 			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
 			$plugin_modules['customer_sync']['is_premium']               = true;
 			$plugin_modules['sales_sync']['is_premium']                  = true;
+			$plugin_modules['woosquare_loyalty']['is_premium']           = true;
 			$plugin_modules['woosquare_payment']['is_premium']           = false;
 			$plugin_modules['woosquare_transaction_addon']['is_premium'] = false;
 			$plugin_modules['items_sync']['module_activate']             = false;
@@ -243,6 +308,7 @@ class Woosquare_Plus_Activator {
 			$plugin_modules['woosquare_card_on_file']['is_premium']      = true;
 			$plugin_modules['items_sync_log']['is_premium']              = true;
 			$plugin_modules['customer_sync']['is_premium']               = true;
+			$plugin_modules['woosquare_loyalty']['is_premium']           = true;
 			$plugin_modules['items_sync']['is_premium']                  = false;
 			$plugin_modules['woosquare_transaction_addon']['is_premium'] = true;
 			$plugin_modules['woosquare_payment']['is_premium']           = false;

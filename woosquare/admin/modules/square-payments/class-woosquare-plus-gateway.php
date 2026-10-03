@@ -165,11 +165,11 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		$is_available = true;
 
 		if ( 'yes' === $this->enabled ) {
-			if ( ! WOOSQU_ENABLE_STAGING && ! wc_checkout_is_https() ) {
+			if ( ! get_transient( 'is_sandbox' ) && ! wc_checkout_is_https() ) {
 				$is_available = false;
 			}
 
-			if ( ! WOOSQU_ENABLE_STAGING && empty( $this->token ) ) {
+			if ( ! get_transient( 'is_sandbox' ) && empty( $this->token ) ) {
 				$is_available = true;
 			}
 
@@ -295,6 +295,30 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				&& is_array( $customers->customer->cards )
 				&& ! is_add_payment_method_page()
 			) {
+				// Dedupe by fingerprint (fallback to card ID) so the same physical card is shown once.
+				$unique_cards      = array();
+				$seen_cards_lookup = array();
+
+				foreach ( $customers->customer->cards as $card_item ) {
+					$fingerprint = isset( $card_item->fingerprint ) ? $card_item->fingerprint : '';
+					$brand       = isset( $card_item->card_brand ) ? $card_item->card_brand : '';
+					$last4       = isset( $card_item->last_4 ) ? $card_item->last_4 : '';
+					$exp_month   = isset( $card_item->exp_month ) ? $card_item->exp_month : '';
+					$exp_year    = isset( $card_item->exp_year ) ? $card_item->exp_year : '';
+
+					$dedupe_key = $this->get_card_dedupe_key( $fingerprint, $brand, $last4, $exp_month, $exp_year );
+
+					if ( empty( $dedupe_key ) ) {
+						continue;
+					}
+
+					if ( isset( $seen_cards_lookup[ $dedupe_key ] ) ) {
+						continue;
+					}
+
+					$seen_cards_lookup[ $dedupe_key ] = true;
+					$unique_cards[]                   = $card_item;
+				}
 
 				?>
 
@@ -314,7 +338,7 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				</thead>
 				<tbody>
 				<?php
-				foreach ( $customers->customer->cards as $cards ) {
+				foreach ( $unique_cards as $cards ) {
 					?>
 					<tr>
 						<td>
@@ -478,6 +502,348 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 	}
 
 	/**
+	 * Retrieve Square card details (including fingerprint) by card ID.
+	 *
+	 * @param string $card_id Card ID returned by Square (e.g. ccof:...).
+	 * @return object|null    Decoded response or null on failure.
+	 */
+	private function get_square_card_details( $card_id ) {
+		if ( empty( $card_id ) ) {
+			return null;
+		}
+
+		$token = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+
+		if ( empty( $token ) ) {
+			return null;
+		}
+
+		$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/cards/' . $card_id;
+
+		$headers = array(
+			'Accept'        => 'application/json',
+			'Authorization' => 'Bearer ' . $token,
+			'Content-Type'  => 'application/json',
+			'Cache-Control' => 'no-cache',
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'headers'     => $headers,
+				'httpversion' => '1.0',
+				'sslverify'   => false,
+				'timeout'     => 30,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return null;
+		}
+
+		$result = json_decode( wp_remote_retrieve_body( $response ) );
+
+		if ( empty( $result->card ) ) {
+			return null;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Checks whether a value is a Square card-on-file ID.
+	 *
+	 * @param string $value Candidate payment source value.
+	 * @return bool
+	 */
+	private function is_square_card_on_file_id( $value ) {
+		return ! empty( $value ) && 0 === strpos( (string) $value, 'ccof:' );
+	}
+
+	/**
+	 * Extract persistent card ID from Square payment response.
+	 *
+	 * @param object $transaction_data Decoded payment response object.
+	 * @return string
+	 */
+	private function extract_persistent_card_id_from_payment_response( $transaction_data ) {
+		if ( ! is_object( $transaction_data ) || empty( $transaction_data->payment ) ) {
+			return '';
+		}
+
+		if ( ! empty( $transaction_data->payment->card_details->card->id ) && $this->is_square_card_on_file_id( $transaction_data->payment->card_details->card->id ) ) {
+			return $transaction_data->payment->card_details->card->id;
+		}
+
+		if ( ! empty( $transaction_data->payment->source_id ) && $this->is_square_card_on_file_id( $transaction_data->payment->source_id ) ) {
+			return $transaction_data->payment->source_id;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Resolve a persistent card ID for recurring use.
+	 *
+	 * If checkout source is a nonce (cnon:), this tries to find an enabled ccof card
+	 * for the Square customer, preferring a last4/expiry match from checkout payload.
+	 *
+	 * @param string $candidate_card_id Candidate card value (ccof or cnon).
+	 * @param string $square_customer_id Square customer ID.
+	 * @return string Persistent ccof card ID or empty string.
+	 */
+	private function resolve_persistent_recurring_card_id( $candidate_card_id, $square_customer_id ) {
+		if ( $this->is_square_card_on_file_id( $candidate_card_id ) ) {
+			return $candidate_card_id;
+		}
+
+		if ( empty( $square_customer_id ) ) {
+			return '';
+		}
+
+		$preferred_last4 = isset( $_POST['woos_plus_2'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_2'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$preferred_exp_m = isset( $_POST['woos_plus_3'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_3'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$preferred_exp_y = isset( $_POST['woos_plus_4'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_4'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		// Avoid blind fallback to the first card when checkout metadata is unavailable.
+		if ( empty( $preferred_last4 ) && empty( $preferred_exp_m ) && empty( $preferred_exp_y ) ) {
+			return '';
+		}
+
+		$customer_object = $this->get_cus( $square_customer_id );
+		if ( empty( $customer_object->customer->cards ) || ! is_array( $customer_object->customer->cards ) ) {
+			return '';
+		}
+
+		foreach ( $customer_object->customer->cards as $card ) {
+			if ( ! isset( $card->id ) || ! $this->is_square_card_on_file_id( $card->id ) ) {
+				continue;
+			}
+
+			if ( isset( $card->enabled ) && ! $card->enabled ) {
+				continue;
+			}
+
+			$last4_match = ! empty( $preferred_last4 ) && isset( $card->last_4 ) && $preferred_last4 === (string) $card->last_4;
+			$exp_m_match = ! empty( $preferred_exp_m ) && isset( $card->exp_month ) && (string) $preferred_exp_m === (string) $card->exp_month;
+			$exp_y_match = ! empty( $preferred_exp_y ) && isset( $card->exp_year ) && (string) $preferred_exp_y === (string) $card->exp_year;
+
+			if ( $last4_match && ( empty( $preferred_exp_m ) || $exp_m_match ) && ( empty( $preferred_exp_y ) || $exp_y_match ) ) {
+				return $card->id;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Persist recurring card/customer identifiers to subscription chain.
+	 *
+	 * Also syncs active/on-hold/pending Square subscriptions for the Woo user so
+	 * Change Payment / Add Payment Method updates renewals (not only Woo tokens).
+	 *
+	 * @param WC_Order $order Current order object.
+	 * @param int|null $parent_order_id Parent order ID if any.
+	 * @param array    $subscriptions Subscription objects associated with order.
+	 * @param string   $persistent_card_id Resolved persistent card ID.
+	 * @param string   $square_customer_id Square customer ID.
+	 * @return void
+	 */
+	private function sync_recurring_payment_meta( $order, $parent_order_id, $subscriptions, $persistent_card_id, $square_customer_id ) {
+		if ( ! is_array( $subscriptions ) ) {
+			$subscriptions = array();
+		}
+
+		$order_customer_id = 0;
+		if ( $order && is_object( $order ) && method_exists( $order, 'get_customer_id' ) ) {
+			$order_customer_id = (int) $order->get_customer_id();
+		}
+		if ( empty( $order_customer_id ) && is_user_logged_in() ) {
+			$order_customer_id = (int) get_current_user_id();
+		}
+
+		// Include all relevant subscriptions for this customer (Change Payment coverage).
+		if ( ! empty( $order_customer_id ) && function_exists( 'wcs_get_users_subscriptions' ) ) {
+			$user_subscriptions = wcs_get_users_subscriptions( $order_customer_id );
+			if ( ! empty( $user_subscriptions ) && is_array( $user_subscriptions ) ) {
+				foreach ( $user_subscriptions as $user_sub ) {
+					if ( ! is_object( $user_sub ) || ! method_exists( $user_sub, 'get_id' ) ) {
+						continue;
+					}
+					$status = method_exists( $user_sub, 'get_status' ) ? $user_sub->get_status() : '';
+					if ( ! in_array( $status, array( 'active', 'on-hold', 'pending' ), true ) ) {
+						continue;
+					}
+					$payment_method = method_exists( $user_sub, 'get_payment_method' ) ? (string) $user_sub->get_payment_method() : '';
+					if ( ! empty( $payment_method )
+						&& $payment_method !== $this->id
+						&& false === strpos( $payment_method, 'square' )
+					) {
+						continue;
+					}
+					$subscriptions[ $user_sub->get_id() ] = $user_sub;
+				}
+			}
+		}
+
+		if ( $order && is_object( $order ) ) {
+			if ( ! empty( $square_customer_id ) ) {
+				$order->update_meta_data( '_square_customer_id', $square_customer_id );
+			}
+
+			if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+				$order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+				$order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+			}
+		}
+
+		if ( ! empty( $parent_order_id ) ) {
+			$parent_order = wc_get_order( $parent_order_id );
+			if ( $parent_order ) {
+				if ( ! empty( $square_customer_id ) ) {
+					$parent_order->update_meta_data( '_square_customer_id', $square_customer_id );
+				}
+				if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+					$parent_order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+					$parent_order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+				}
+				$parent_order->save();
+			}
+		}
+
+		foreach ( $subscriptions as $subscription_item ) {
+			if ( ! is_object( $subscription_item ) ) {
+				continue;
+			}
+			if ( ! empty( $square_customer_id ) ) {
+				$subscription_item->update_meta_data( '_square_customer_id', $square_customer_id );
+			}
+			if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+				$subscription_item->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+				$subscription_item->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+			}
+			$subscription_item->save();
+
+			// Keep each subscription parent order aligned when Change Payment hits one sub.
+			if ( method_exists( $subscription_item, 'get_parent_id' ) ) {
+				$sub_parent_id = $subscription_item->get_parent_id();
+				if ( ! empty( $sub_parent_id ) && (int) $sub_parent_id !== (int) $parent_order_id ) {
+					$sub_parent = wc_get_order( $sub_parent_id );
+					if ( $sub_parent ) {
+						if ( ! empty( $square_customer_id ) ) {
+							$sub_parent->update_meta_data( '_square_customer_id', $square_customer_id );
+						}
+						if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+							$sub_parent->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+							$sub_parent->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+						}
+						$sub_parent->save();
+					}
+				}
+			}
+		}
+
+		if ( ! empty( $order_customer_id ) && ! empty( $square_customer_id ) ) {
+			update_user_meta( $order_customer_id, '_square_customer_id', $square_customer_id );
+		}
+		if ( ! empty( $order_customer_id ) && $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+			update_user_meta( $order_customer_id, '_woos_plus_customer_card_id', $persistent_card_id );
+		}
+	}
+
+	/**
+	 * Resolve default WooCommerce Square card-on-file token (ccof:) for a user.
+	 *
+	 * @param int $customer_id WooCommerce user ID.
+	 * @return string
+	 */
+	protected function get_woo_default_square_ccof( $customer_id ) {
+		if ( empty( $customer_id ) || ! class_exists( 'WC_Payment_Tokens' ) ) {
+			return '';
+		}
+
+		$default_token = WC_Payment_Tokens::get_customer_default_token( $customer_id, $this->id );
+		if ( is_null( $default_token ) ) {
+			$default_token = WC_Payment_Tokens::get_customer_default_token( $customer_id );
+		}
+		if ( is_null( $default_token ) ) {
+			$all_tokens    = WC_Payment_Tokens::get_customer_tokens( $customer_id );
+			$square_tokens = array();
+			foreach ( $all_tokens as $token_obj ) {
+				$token_gateway_id = $token_obj->get_gateway_id();
+				if ( false !== strpos( (string) $token_gateway_id, 'square' ) ) {
+					$square_tokens[] = $token_obj;
+				}
+			}
+			if ( ! empty( $square_tokens ) ) {
+				$default_token = reset( $square_tokens );
+			}
+		}
+
+		if ( is_null( $default_token ) ) {
+			return '';
+		}
+
+		$token_value = $default_token->get_token();
+		return $this->is_square_card_on_file_id( $token_value ) ? $token_value : '';
+	}
+
+	/**
+	 * Whether a stored Square customer identity matches the Woo order customer.
+	 * Rejects Instant Profiles (no email) unless reference_id matches the Woo user ID.
+	 *
+	 * @param string   $square_customer_id Square customer ID.
+	 * @param WC_Order $order              Order object.
+	 * @return bool
+	 */
+	protected function square_customer_matches_order( $square_customer_id, $order ) {
+		if ( empty( $square_customer_id ) || ! $order ) {
+			return false;
+		}
+
+		$customer_object = $this->get_cus( $square_customer_id );
+		if ( empty( $customer_object->customer ) ) {
+			return false;
+		}
+
+		$sq_customer = $customer_object->customer;
+		$order_email = strtolower( sanitize_email( $order->get_billing_email() ) );
+		$sq_email    = ! empty( $sq_customer->email_address ) ? strtolower( (string) $sq_customer->email_address ) : '';
+
+		if ( ! empty( $sq_email ) && ! empty( $order_email ) ) {
+			return $sq_email === $order_email;
+		}
+
+		$woo_customer_id = (int) $order->get_customer_id();
+		$reference_id    = ! empty( $sq_customer->reference_id ) ? (string) $sq_customer->reference_id : '';
+		if ( $woo_customer_id && $reference_id === (string) $woo_customer_id ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Build a stable dedupe key for a card.
+	 * Priority: fingerprint; fallback to brand|last4|exp.
+	 *
+	 * @param string $fingerprint Square fingerprint if available.
+	 * @param string $brand       Card brand.
+	 * @param string $last4       Last 4 digits.
+	 * @param string $exp_month   Expiry month.
+	 * @param string $exp_year    Expiry year.
+	 *
+	 * @return string
+	 */
+	private function get_card_dedupe_key( $fingerprint = '', $brand = '', $last4 = '', $exp_month = '', $exp_year = '' ) {
+		if ( ! empty( $fingerprint ) ) {
+			return $fingerprint;
+		}
+
+		return strtolower( (string) $brand ) . '|' . (string) $last4 . '|' . (string) $exp_month . '|' . (string) $exp_year;
+	}
+
+	/**
 	 * Creates a new card for a Square customer.
 	 *
 	 * @param string $_square_customer_id The Square customer ID.
@@ -575,7 +941,7 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		}
 
 		wp_register_script( 'square', '', '', '0.0.2', true );
-		wp_register_script( 'woocommerce-square', WOOSQUARE_PLUGIN_URL_PAYMENT . '/js/SquarePayments.js', array( 'jquery', 'square' ), WOOSQUARE_VERSION, true );
+		wp_register_script( 'woocommerce-square', WOOSQUARE_PLUGIN_URL_PAYMENT . '/js/SquarePayments.js', array( 'jquery', 'squareSDK' ), WOOSQUARE_VERSION, true );
 		if ( get_transient( 'is_sandbox' ) ) {
 			$env = 'development';
 		} else {
@@ -632,13 +998,25 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 			$customer_id        = $this->get_customer_id( $order );
 			$square_customer_id = $this->get_square_customer_id( $customer_id, $parent_order_id, $order );
 
-			// If no Square customer exists, search for one using the billing email.
-			$square_customer_id = $this->search_square_customer_by_email( $order );
+			// Do not reuse Instant Profiles / mismatched Square customers across Woo users.
+			if ( $square_customer_id && ! $this->square_customer_matches_order( $square_customer_id, $order ) ) {
+				$this->log(
+					sprintf(
+						'Square customer %s does not match order identity; ignoring stored ID and resolving by email/create.',
+						substr( (string) $square_customer_id, 0, 8 ) . '****'
+					)
+				);
+				$square_customer_id = null;
+			}
+
+			// Search by email only if we don't already have a Square customer ID.
+			if ( ! $square_customer_id ) {
+				$square_customer_id = $this->search_square_customer_by_email( $order );
+			}
 
 			// If still no Square customer, create a new one.
 			if ( ! $square_customer_id ) {
 				$square_customer_id = $this->create_square_customer( $order, $parent_order_id );
-
 			}
 
 			// Update order with the Square customer ID.
@@ -689,8 +1067,11 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 	 * @return bool True if we should create or process the customer.
 	 */
 	public function should_create_or_process_customer( $order_id ) {
-		if ( ! isset( $_POST['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
-			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+		// Skip nonce verification - handled by process_payment and WooCommerce checkout.
+		// Nonce can expire during AJAX updates, causing false failures.
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verification handled by process_payment and WooCommerce checkout.
+		if ( ! isset( $_POST['square_pay_nonce'] ) ) {
+			return false; // Don't process if nonce is completely missing.
 		}
 		$is_subscription    = $this->check_subscription( $order_id ) && empty( $_POST['saved_cards'] );
 		$is_card_saved      = isset( $_POST['square_plussq-card-saved'] ) && 'on' === $_POST['square_plussq-card-saved'];
@@ -698,7 +1079,6 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		$is_wcf_checkout    = isset( $_POST['_wcf_flow_id'] ) && is_numeric( $_POST['_wcf_flow_id'] ) && isset( $_POST['_wcf_checkout_id'] ) && is_numeric( $_POST['_wcf_checkout_id'] ) && empty( $_POST['saved_cards'] );
 		$is_pre_order       = $this->maybe_process_pre_orders( $order_id );
 		$is_create_customer = $this->create_customer;
-		$is_guest_customer  = ! empty( get_option( 'woo_square_create_customer_guest' ) ) && get_option( 'woo_square_create_customer_guest' ) === '1';
 
 		return (
 			$is_subscription ||
@@ -706,9 +1086,9 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 			$is_payment_change ||
 			$is_wcf_checkout ||
 			$is_pre_order ||
-			$is_create_customer ||
-			$is_guest_customer
+			$is_create_customer
 		);
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 	}
 
 	/**
@@ -746,6 +1126,11 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 	 * @return string|null The Square customer ID or null if not found.
 	 */
 	public function search_square_customer_by_email( $order ) {
+		$order_email = strtolower( sanitize_email( $order->get_billing_email() ) );
+		if ( empty( $order_email ) ) {
+			return null;
+		}
+
 		$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/customers/search';
 		$headers = $this->get_square_api_headers();
 
@@ -753,7 +1138,7 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 			'query' => array(
 				'filter' => array(
 					'email_address' => array(
-						'exact' => strtolower( $order->get_billing_email() ),
+						'exact' => $order_email,
 					),
 				),
 			),
@@ -771,8 +1156,23 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		);
 
 		$search_customer = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( empty( $search_customer['customers'] ) || ! is_array( $search_customer['customers'] ) ) {
+			return null;
+		}
 
-		return ! empty( $search_customer['customers'][0]['id'] ) ? $search_customer['customers'][0]['id'] : null;
+		// Require an exact email on the Square record — skip Instant Profiles without email.
+		foreach ( $search_customer['customers'] as $candidate ) {
+			if ( empty( $candidate['id'] ) ) {
+				continue;
+			}
+			$candidate_email = ! empty( $candidate['email_address'] ) ? strtolower( (string) $candidate['email_address'] ) : '';
+			if ( empty( $candidate_email ) || $candidate_email !== $order_email ) {
+				continue;
+			}
+			return $candidate['id'];
+		}
+
+		return null;
 	}
 
 	/**
@@ -787,10 +1187,14 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		$headers = $this->get_square_api_headers();
 
 		$shipping_address = $this->get_order_billing_shipping_address( $order );
+		$shipping_first   = sanitize_text_field( $order->get_shipping_first_name() );
+		$shipping_last    = sanitize_text_field( $order->get_shipping_last_name() );
+		$billing_first    = sanitize_text_field( $order->get_billing_first_name() );
+		$billing_last     = sanitize_text_field( $order->get_billing_last_name() );
 
 		$customer_data = array(
-			'given_name'    => null !== $order->get_shipping_first_name() ? sanitize_text_field( $order->get_shipping_first_name() ) : sanitize_text_field( $order->get_billing_first_name() ),
-			'family_name'   => null !== $order->get_shipping_last_name() ? sanitize_text_field( $order->get_shipping_last_name() ) : sanitize_text_field( $order->get_billing_last_name() ),
+			'given_name'    => ! empty( $shipping_first ) ? $shipping_first : $billing_first,
+			'family_name'   => ! empty( $shipping_last ) ? $shipping_last : $billing_last,
 			'email_address' => sanitize_email( $order->get_billing_email() ),
 			'address'       => $shipping_address,
 			'phone_number'  => sanitize_text_field( $order->get_billing_phone() ),
@@ -884,9 +1288,11 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 	 */
 	public function process_payment( $order_id ) {
 
-		if ( ! isset( $_POST['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
-			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
-		}
+		// Security: Verify WooCommerce checkout process.
+		// The 'woocommerce-process-checkout-nonce' is already verified by WooCommerce
+		// during checkout submission, so we don't need to verify it again here.
+		// This prevents guest checkout failures due to expired nonces during AJAX updates.
+		// phpcs:disable WordPress.Security.NonceVerification -- Nonce verification handled by WooCommerce checkout process.
 		$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 		$location_id                      = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 
@@ -915,13 +1321,14 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 		$currency = $order->get_currency();
 
-		// check if falid order manual pay.
+		// Check if failed order manual pay.
 		$parent_order_id = null;
 		$subscription    = false;
+		$subscriptions   = array();
 		if ( class_exists( 'WC_Subscriptions_Order' ) ) {
 			if ( wcs_order_contains_subscription( $order_id, array( 'parent', 'renewal' ) ) ) {
 				$subscriptions = wcs_get_subscriptions_for_order( $order_id, array( 'order_type' => array( 'parent', 'renewal' ) ) );
-				// get parent order.
+				// Get parent order.
 				foreach ( $subscriptions as $subscription ) {
 					if ( $subscription->get_parent_id() ) {
 						$parent_order    = $subscription->get_parent();
@@ -933,13 +1340,39 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 		}
 
 		try {
-			// shipping address.
+			// Shipping address.
 			$shipping_address = $this->get_order_billing_shipping_address( $order );
-			// billing address.
+			// Billing address.
 			$billing_address = $this->get_order_billing_shipping_address( $order );
 
 			$this->process_square_customer( $order, $parent_order_id, $order_id );
-
+			// Ensure we have a Square customer ID for the payment.
+			$square_customer_id = $order->get_meta( '_square_customer_id', true );
+			if ( ! empty( $square_customer_id ) && ! $this->square_customer_matches_order( $square_customer_id, $order ) ) {
+				$square_customer_id = '';
+			}
+			if ( empty( $square_customer_id ) ) {
+				// Resolve existing Square customer only (user meta / email).
+				$customer_id = $order->get_customer_id();
+				if ( $customer_id ) {
+					$square_customer_id = get_user_meta( $customer_id, '_square_customer_id', true );
+					if ( ! empty( $square_customer_id ) && ! $this->square_customer_matches_order( $square_customer_id, $order ) ) {
+						$square_customer_id = '';
+					}
+				}
+				if ( empty( $square_customer_id ) ) {
+					$square_customer_id = $this->search_square_customer_by_email( $order );
+				}
+				// WP-1033: create only when Create Customer is enabled, or subscription/card-on-file exceptions apply.
+				// Creation is also handled inside process_square_customer(); keep this path guarded too.
+				if ( empty( $square_customer_id ) && $this->should_create_or_process_customer( $order_id ) ) {
+					$square_customer_id = $this->create_square_customer( $order, $parent_order_id );
+				}
+				if ( $square_customer_id ) {
+					$this->update_order_with_square_customer_id( $order, $parent_order_id, $square_customer_id );
+					$order->save();
+				}
+			}
 			if ( isset( $_POST['wc-square-recurring-payment-token'] )
 				&& is_numeric( $_POST['wc-square-recurring-payment-token'] )
 			) {
@@ -961,22 +1394,72 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 					$customer_card_id = sanitize_text_field( wp_unslash( $_POST['square_nonce'] ) );
 
-					if ( isset( $_POST[ 'wc-' . $this->id . '-payment-token' ] ) && 'new' === $_POST[ 'wc-' . $this->id . '-payment-token' ] ) {
-						$wc_payment_token = new WC_Payment_Token_CC();
-						$wc_payment_token->set_token( $customer_card_id );
-						$wc_payment_token->set_gateway_id( $this->id ); // `$this->id` references the gateway ID set in `__construct`
-						$wc_payment_token->set_card_type( strtolower( isset( $_POST['woos_plus_1'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_1'] ) ) : '' ) );
-						$wc_payment_token->set_last4( isset( $_POST['woos_plus_2'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_2'] ) ) : '' );
-						$wc_payment_token->set_expiry_month( isset( $_POST['woos_plus_3'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_3'] ) ) : '' );
-						$wc_payment_token->set_expiry_year( isset( $_POST['woos_plus_4'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_4'] ) ) : '' );
-						$wc_payment_token->set_user_id( get_current_user_id() );
-						$wc_payment_token->save();
+					$allow_new_token  = true;
+					$existing_card_id = null;
+					$new_card_fp      = '';
+					$new_card_brand   = isset( $_POST['woos_plus_1'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_1'] ) ) : '';
+					$new_card_last4   = isset( $_POST['woos_plus_2'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_2'] ) ) : '';
+					$new_card_exp_m   = isset( $_POST['woos_plus_3'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_3'] ) ) : '';
+					$new_card_exp_y   = isset( $_POST['woos_plus_4'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_4'] ) ) : '';
+
+					// Fetch fingerprint for the newly created card.
+					$new_card_details = $this->get_square_card_details( $customer_card_id );
+					if ( ! empty( $new_card_details->card->fingerprint ) ) {
+						$new_card_fp = $new_card_details->card->fingerprint;
 					}
 
-					if ( $parent_order_id ) {
-						$parent_order->update_meta_data( '_woos_plus_customer_card_id', $customer_card_id );
-					} else {
-						$order->add_meta_data( '_woos_plus_customer_card_id', $customer_card_id );
+					$new_card_key = $this->get_card_dedupe_key( $new_card_fp, $new_card_brand, $new_card_last4, $new_card_exp_m, $new_card_exp_y );
+
+					// Check existing cards for the same customer to avoid duplicates.
+					if ( ! empty( $square_customer_id ) ) {
+						$existing_customer_cards = $this->get_cus( $square_customer_id );
+
+						if ( ! empty( $existing_customer_cards->customer->cards ) && is_array( $existing_customer_cards->customer->cards ) ) {
+							foreach ( $existing_customer_cards->customer->cards as $existing_card ) {
+								$existing_fp    = isset( $existing_card->fingerprint ) ? $existing_card->fingerprint : '';
+								$existing_brand = isset( $existing_card->card_brand ) ? $existing_card->card_brand : '';
+								$existing_last4 = isset( $existing_card->last_4 ) ? $existing_card->last_4 : '';
+								$existing_exp_m = isset( $existing_card->exp_month ) ? $existing_card->exp_month : '';
+								$existing_exp_y = isset( $existing_card->exp_year ) ? $existing_card->exp_year : '';
+
+								$existing_key = $this->get_card_dedupe_key( $existing_fp, $existing_brand, $existing_last4, $existing_exp_m, $existing_exp_y );
+
+								if ( $existing_key && $new_card_key && $existing_key === $new_card_key && $existing_card->id !== $customer_card_id ) {
+									$existing_card_id = $existing_card->id;
+									break;
+								}
+							}
+						}
+					}
+
+					// If duplicate found, reuse the existing card ID and skip saving a new WC token.
+					if ( ! empty( $existing_card_id ) ) {
+						$customer_card_id = $existing_card_id;
+						$allow_new_token  = false;
+					}
+
+					if ( isset( $_POST[ 'wc-' . $this->id . '-payment-token' ] ) && 'new' === $_POST[ 'wc-' . $this->id . '-payment-token' ] ) {
+						if ( $allow_new_token ) {
+							$wc_payment_token = new WC_Payment_Token_CC();
+							$wc_payment_token->set_token( $customer_card_id );
+							$wc_payment_token->set_gateway_id( $this->id ); // `$this->id` references the gateway ID set in `__construct`
+							$wc_payment_token->set_card_type( strtolower( isset( $_POST['woos_plus_1'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_1'] ) ) : '' ) );
+							$wc_payment_token->set_last4( isset( $_POST['woos_plus_2'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_2'] ) ) : '' );
+							$wc_payment_token->set_expiry_month( isset( $_POST['woos_plus_3'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_3'] ) ) : '' );
+							$wc_payment_token->set_expiry_year( isset( $_POST['woos_plus_4'] ) ? sanitize_text_field( wp_unslash( $_POST['woos_plus_4'] ) ) : '' );
+							$wc_payment_token->set_user_id( get_current_user_id() );
+							$wc_payment_token->save();
+						}
+					}
+
+					$persistent_card_id = $this->resolve_persistent_recurring_card_id( $customer_card_id, $square_customer_id );
+					if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+						if ( $parent_order_id ) {
+							$parent_order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+							$parent_order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+						}
+						$order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+						$order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
 					}
 				}
 			} elseif ( isset( $_POST['saved_cards'] ) && ! empty( $_POST['saved_cards'] ) ) {
@@ -1003,7 +1486,37 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 			if ( isset( $_POST['woocommerce_change_payment'] ) && is_numeric( $_POST['woocommerce_change_payment'] ) ) {
 				$woocommerce_change_payment = sanitize_text_field( wp_unslash( $_POST['woocommerce_change_payment'] ) );
-				$parent_order->save();
+
+				// Change Payment previously saved Woo tokens only — force sync onto all user Square subscriptions.
+				$persistent_card_id = '';
+				if ( isset( $customer_card_id ) ) {
+					$persistent_card_id = $this->resolve_persistent_recurring_card_id( $customer_card_id, $square_customer_id );
+					if ( ! $this->is_square_card_on_file_id( $persistent_card_id ) && $this->is_square_card_on_file_id( $customer_card_id ) ) {
+						$persistent_card_id = $customer_card_id;
+					}
+				}
+				if ( ! $this->is_square_card_on_file_id( $persistent_card_id ) && ! empty( $_POST['saved_cards'] ) ) {
+					$persistent_card_id = sanitize_text_field( wp_unslash( $_POST['saved_cards'] ) );
+				}
+
+				$change_subs   = is_array( $subscriptions ) ? $subscriptions : array();
+				$change_sub_id = absint( $woocommerce_change_payment );
+				if ( $change_sub_id && function_exists( 'wcs_get_subscription' ) ) {
+					$change_sub = wcs_get_subscription( $change_sub_id );
+					if ( $change_sub ) {
+						$change_subs[ $change_sub_id ] = $change_sub;
+						if ( empty( $parent_order_id ) && $change_sub->get_parent_id() ) {
+							$parent_order_id = $change_sub->get_parent_id();
+						}
+					}
+				}
+
+				$sync_parent_id = ! empty( $parent_order_id ) ? $parent_order_id : ( $order ? $order->get_id() : null );
+				$this->sync_recurring_payment_meta( $order, $sync_parent_id, $change_subs, $persistent_card_id, $square_customer_id );
+
+				if ( ! empty( $parent_order ) && is_object( $parent_order ) ) {
+					$parent_order->save();
+				}
 				$order->save();
 				return array(
 					'result'   => 'success',
@@ -1020,6 +1533,19 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				&& ( isset( $customer_card_id )
 				|| isset( $card_nonce ) )
 			) {
+
+				// WP-1033: Square customer ID is required only for subscription/card-on-file/saved-card flows.
+				// Normal one-time nonce payments can proceed without creating a Square customer.
+				$requires_square_customer = $this->should_create_or_process_customer( $order_id )
+					|| ( ! empty( $_POST['saved_cards'] ) )
+					|| $subscription;
+				if ( empty( $square_customer_id ) && $requires_square_customer ) {
+					$order->update_status( 'failed', __( 'Square customer ID is required for payment processing.', 'woosquare' ) );
+					return array(
+						'result'   => 'failure',
+						'messages' => __( 'Unable to process payment. Please try again.', 'woosquare' ),
+					);
+				}
 
 				$idempotency_key = (string) $order_id . wp_rand( 10000, 200000 );
 
@@ -1053,6 +1579,12 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 					$fields['source_id'] = $card_nonce;
 				}
 
+				// One-time payments: attach already-resolved Square customer so Square "Paid by" matches Woo.
+				// Does not create customers here — only sends ID resolved earlier in process_payment.
+				if ( empty( $fields['customer_id'] ) && ! empty( $square_customer_id ) ) {
+					$fields['customer_id'] = $square_customer_id;
+				}
+
 				$fields['autocomplete']    = $this->capture ? false : true;
 				$fields['idempotency_key'] = $idempotency_key;
 				$fields['location_id']     = $location_id;
@@ -1066,11 +1598,18 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				) {
 
 					$fields['source_id'] = $customer_card_id;
-					$order->add_meta_data( '_woos_plus_customer_card_id', $customer_card_id );
-					if ( $parent_order_id ) {
-						$parent_order->update_meta_data( '_woos_plus_customer_card_id', $customer_card_id );
-						$parent_order->save();
+					$persistent_card_id  = $this->resolve_persistent_recurring_card_id( $customer_card_id, $square_customer_id );
+					if ( $this->is_square_card_on_file_id( $persistent_card_id ) ) {
+						$order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+						$order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+						if ( $parent_order_id ) {
+							$parent_order->update_meta_data( '_woos_plus_customer_card_id', $persistent_card_id );
+							$parent_order->update_meta_data( '_woos_plus_source_id', $persistent_card_id );
+							$parent_order->save();
+						}
 					}
+					// Get the Square customer ID from the order meta data.
+					$square_customer_id    = $order->get_meta( '_square_customer_id', true );
 					$fields['customer_id'] = $square_customer_id;
 				}
 
@@ -1085,20 +1624,31 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				// need to add order creation function and get the order id.
 				// order sync must be used in live environment ..
 				if ( get_option( 'woo_square_customer_sync_square_order_sync' ) === '1' ) {
-					$user_id = $order->get_customer_id();
+					$user_id                     = $order->get_customer_id();
+					$resolved_square_customer_id = $square_customer_id;
 					if ( empty( $user_id ) ) {
-						$_square_customer_id = $order->get_meta( '_square_customer_id', true );
+						// For guest checkout, use the Square customer ID we already have.
+						$_square_customer_id = $resolved_square_customer_id;
 					} else {
 						$_square_customer_id = get_user_meta( $user_id, '_square_customer_id', true );
+						if ( ! empty( $_square_customer_id ) ) {
+							$resolved_square_customer_id = $_square_customer_id;
+						}
 					}
-					$fields['customer_id'] = $_square_customer_id;
+					if ( ! empty( $resolved_square_customer_id ) ) {
+						$fields['customer_id'] = $resolved_square_customer_id;
+					}
 				}
 
 				if ( ( function_exists( 'square_order_sync_add_on' ) && ! isset( $_POST['funnel_order'] ) ) ||
 					( function_exists( 'square_order_sync_add_on' ) && isset( $_POST['_wcf_flow_id'] ) )
 				) {
 
-					$fields['order_id'] = square_order_sync_add_on( $order, $location_id, $currency, $idempotency_key, $this->token, 'squareup' . get_transient( 'is_sandbox' ), $fields['customer_id'] );
+					$customer_id        = isset( $fields['customer_id'] ) ? $fields['customer_id'] : '';
+					$fields['order_id'] = square_order_sync_add_on( $order, $location_id, $currency, $idempotency_key, $this->token, 'squareup' . get_transient( 'is_sandbox' ), $customer_id );
+					if ( ! empty( $fields['order_id'] ) ) {
+						$this->persist_square_order_id( $order, $fields['order_id'] );
+					}
 					if ( ! empty( get_transient( 'squresettotal' ) ) ) {
 						$fields['amount_money']['amount'] = get_transient( 'squresettotal' );
 						$forordernote                     = 'reset the payment total to the total calculated by Square to prevent errors';
@@ -1106,17 +1656,71 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 					}
 				}
 
-				if ( ! empty( $_POST['saved_cards'] ) || ( isset( $_POST[ 'square_plus' . get_transient( 'is_sandbox' ) . 'sq-card-saved' ] ) && 'on' === $_POST[ 'square_plus' . get_transient( 'is_sandbox' ) . 'sq-card-saved' ] ) ) {
-					$fields['source_id']   = $card_nonce;
-					$fields['customer_id'] = isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : '';
+				$selected_saved_card_id = isset( $_POST['saved_cards'] ) ? sanitize_text_field( wp_unslash( $_POST['saved_cards'] ) ) : '';
+				if ( ! empty( $selected_saved_card_id ) ) {
+					$fields['source_id'] = $selected_saved_card_id;
+					if ( $this->is_square_card_on_file_id( $selected_saved_card_id ) ) {
+						$order->update_meta_data( '_woos_plus_customer_card_id', $selected_saved_card_id );
+						$order->update_meta_data( '_woos_plus_source_id', $selected_saved_card_id );
+						if ( $parent_order_id ) {
+							$parent_order->update_meta_data( '_woos_plus_customer_card_id', $selected_saved_card_id );
+							$parent_order->update_meta_data( '_woos_plus_source_id', $selected_saved_card_id );
+						}
+					}
+					$fields['customer_id'] = isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : $square_customer_id;
 				}
 
 				if ( isset( $_POST['funnel_order'] ) && ! empty( $_POST['funnel_order'] ) ) {
 					$fields['source_id']   = $card_nonce;
-					$fields['customer_id'] = isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : '';
+					$fields['customer_id'] = isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : $square_customer_id;
 				}
-				$order->update_meta_data( '_woos_plus_source_id', $card_nonce );
-				$order->update_meta_data( '_woos_plus_customer_id', isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : '' );
+				if ( isset( $fields['source_id'] ) && ! empty( $fields['source_id'] ) ) {
+					$order->update_meta_data( '_woos_plus_source_id', sanitize_text_field( (string) $fields['source_id'] ) );
+				}
+				$order->update_meta_data( '_woos_plus_customer_id', isset( $_POST['square_customerid'] ) ? sanitize_text_field( wp_unslash( $_POST['square_customerid'] ) ) : $square_customer_id );
+
+				if ( function_exists( 'redeem_loyalty_reward' ) ) {
+					/**
+					 * ----------------
+					 * LOYALTY logic
+					 * ----------------
+					 */
+					$loyalty_account_id = WC()->session->get( 'loyalty_account_id' );
+					$reward_tier_id     = WC()->session->get( 'reward_tier_id' );
+					$redeeming_rewards  = false;
+					$cart_fees          = WC()->cart->get_fees();
+
+					foreach ( $cart_fees as $fee ) {
+						if ( isset( $fee->name ) && 'Loyalty Discount' === $fee->name ) {
+							$redeeming_rewards = true;
+							break;
+						}
+					}
+					if ( ! $redeeming_rewards && WC()->session ) {
+						$redeeming_rewards = (bool) WC()->session->get( 'applied_reward_name' );
+					}
+
+					// If the loyalty discount fee is applied and we have account + tier.
+					if ( $redeeming_rewards && $loyalty_account_id && $reward_tier_id && ! empty( $fields['order_id'] ) ) {
+
+							// Redeem loyalty points.
+							$redeemed = redeem_loyalty_reward(
+								$fields['order_id'],
+								$loyalty_account_id,
+								$reward_tier_id,
+								$order_id
+							);
+
+						if ( 'square-redemption' === get_option( 'wcs_loyalty_redemption_option', '' ) && function_exists( 'woosquare_loyalty_fetch_square_order_total_amount' ) ) {
+							$square_total = woosquare_loyalty_fetch_square_order_total_amount( $fields['order_id'] );
+							if ( $square_total > 0 ) {
+								$fields['amount_money']['amount'] = $square_total;
+								$forordernote                     = 'reset the payment total to the total calculated by Square after loyalty redeem';
+							}
+						}
+
+					}
+				}
 
 				$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/payments';
 
@@ -1142,23 +1746,41 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 					)
 				);
 
-				$order = new WC_Order( $order_id );
+				$order = wc_get_order( $order_id );
+				if ( ! $order ) {
+					if ( function_exists( 'woosquare_loyalty_restore_points_after_failed_payment' ) ) {
+						woosquare_loyalty_restore_points_after_failed_payment( $order_id );
+					}
+					wc_add_notice( __( 'Unable to process payment. Please try again.', 'woosquare' ), 'error' );
+					return array(
+						'result'   => 'failure',
+						'messages' => __( 'Unable to process payment. Please try again.', 'woosquare' ),
+					);
+				}
+
+				if ( ! empty( $fields['order_id'] ) ) {
+					$this->persist_square_order_id( $order, $fields['order_id'] );
+				}
+
 				if ( isset( $transaction_data->payment->id ) && 'CAPTURED' === $transaction_data->payment->card_details->status ) {
 					$transaction_id = $transaction_data->payment->id;
 					$order->add_meta_data( 'woosquare_transaction_id', $transaction_id );
 					$order->add_meta_data( '_transaction_id', $transaction_id );
 					$order->add_meta_data( 'woosquare_transaction_location_id', $location_id );
+					if ( ! empty( $transaction_data->payment->order_id ) ) {
+						$this->persist_square_order_id( $order, $transaction_data->payment->order_id );
+					}
 					if ( isset( $forordernote ) ) {
 						$order->add_meta_data( 'squresettotal_forordernote', $forordernote );
 					}
-					// if sandbox enable add sandbox prefix.
+					// If sandbox enable add sandbox prefix.
 					$sandbox_prefix = get_transient( 'is_sandbox' ) ? 'through sandbox' : '';
 					$amount         = number_format( $transaction_data->payment->amount_money->amount / 100, 2 ); // Assuming amount is in cents.
 					set_transient( 'squwfocu_order_id', $order_id, 2400 );
 
 					// Mark as processing.
 
-					// clear cart.
+					// Clear cart.
 					WC()->cart->empty_cart();
 
 					if ( isset( $_POST['funnel_order'] ) ) {
@@ -1177,11 +1799,34 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 					/* translators: 1: Sandbox prefix (e.g., '[SANDBOX]'), 2: Transaction ID, 3: Payment amount in dollars. */
 					$message = sprintf( __( 'Square Credit Card Payment %1$s complete for $%3$s (Transaction ID: %2$s).', 'woosquare' ), $sandbox_prefix, $transaction_id, $amount );
+					$order->save();
 					$order->update_status( apply_filters( 'square_order_status_woo_to_square', 'processing' ), $message );
 
+					if ( ! empty( $transaction_data->payment->customer_id ) ) {
+						$square_customer_id = $transaction_data->payment->customer_id;
+					}
+					$persistent_card_id = $this->extract_persistent_card_id_from_payment_response( $transaction_data );
+					if ( ! $this->is_square_card_on_file_id( $persistent_card_id ) && isset( $customer_card_id ) ) {
+						$persistent_card_id = $this->resolve_persistent_recurring_card_id( $customer_card_id, $square_customer_id );
+					}
+					$this->sync_recurring_payment_meta( $order, $parent_order_id, $subscriptions, $persistent_card_id, $square_customer_id );
+
 					$order->payment_complete( $transaction_data->payment->id );
+					if ( function_exists( 'woosquare_loyalty_mark_redeem_committed' ) ) {
+						woosquare_loyalty_mark_redeem_committed( $order );
+					}
 					// Return thank you page redirect.
-					$order->save();
+
+					if ( WC()->session && is_object( WC()->session ) ) {
+						// Clear all session values related to the loyalty reward.
+						WC()->session->__unset( 'applied_reward_name' );
+						WC()->session->__unset( 'applied_reward_points' );
+						WC()->session->__unset( 'loyalty_account_id' );
+						WC()->session->__unset( 'reward_tier_id' );
+						WC()->session->__unset( 'store_credit_discount_type' );
+						WC()->session->__unset( 'store_credit_discount_amount' );
+					}
+
 					return array(
 						'result'   => 'success',
 						'redirect' => $get_return_url,
@@ -1208,6 +1853,10 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 					// clear cart.
 					WC()->cart->empty_cart();
+
+					if ( function_exists( 'woosquare_loyalty_mark_redeem_committed' ) ) {
+						woosquare_loyalty_mark_redeem_committed( $order );
+					}
 					$order->save();
 					// Return thank you page redirect.
 
@@ -1235,6 +1884,11 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 					if ( get_transient( 'square_fulfillments' ) ) {
 						do_action( 'cancelled_orphened_order', get_transient( 'square_fulfillments' ) );
+					}
+
+					// WSSS-412: restore loyalty points when payment fails after redeem.
+					if ( function_exists( 'woosquare_loyalty_restore_points_after_failed_payment' ) ) {
+						woosquare_loyalty_restore_points_after_failed_payment( $order );
 					}
 
 					$order->save();
@@ -1270,14 +1924,24 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				wc_add_notice( $message, 'error' );
 			}
 
-			$order->update_status( 'failed', $ex->getMessage() );
-			$parent_order->save();
-			$order->save();
+			$fail_order = isset( $order ) && $order ? $order : ( isset( $order_id ) ? wc_get_order( $order_id ) : null );
+			if ( function_exists( 'woosquare_loyalty_restore_points_after_failed_payment' ) ) {
+				woosquare_loyalty_restore_points_after_failed_payment( $fail_order ? $fail_order : ( isset( $order_id ) ? $order_id : 0 ) );
+			}
+
+			if ( $fail_order ) {
+				$fail_order->update_status( 'failed', $ex->getMessage() );
+				$fail_order->save();
+			}
+			if ( isset( $parent_order ) && $parent_order ) {
+				$parent_order->save();
+			}
 			return array(
 				'result'   => 'failure',
 				'messages' => $message,
 			);
 		}
+		// phpcs:enable WordPress.Security.NonceVerification
 	}
 
 	/**
@@ -1350,6 +2014,7 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 
 		// Remove cart.
 		WC()->cart->empty_cart();
+
 		// Is pre ordered!
 		WC_Pre_Orders_Order::mark_order_as_pre_ordered( $order );
 
@@ -1397,7 +2062,8 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 				$total = absint( $total );
 				break;
 			default:
-				$total = round( $total, 2 ) * 100; // In cents.
+				$total = round( $total, 2 );
+				$total = (int) round( $total * 100, 0 );
 				break;
 		}
 
@@ -1704,6 +2370,37 @@ class WooSquare_Plus_Gateway extends WC_Payment_Gateway {
 			$pre_order->save();
 			$pre_order->update_status( 'failed', $ex->getMessage() );
 		}
+	}
+
+	/**
+	 * Persist Square order id on the Woo order for loyalty/order-sync consumers.
+	 *
+	 * @param WC_Order $order           Woo order.
+	 * @param string   $square_order_id Square order id.
+	 * @return void
+	 */
+	private function persist_square_order_id( $order, $square_order_id ) {
+		if ( function_exists( 'woosquare_loyalty_persist_square_order_id' ) ) {
+			woosquare_loyalty_persist_square_order_id( $order, $square_order_id );
+			return;
+		}
+
+		$square_order_id = sanitize_text_field( (string) $square_order_id );
+		if ( ! $order || '' === $square_order_id ) {
+			return;
+		}
+
+		$existing = sanitize_text_field( (string) $order->get_meta( 'square_order_id', true ) );
+		if ( $existing === $square_order_id ) {
+			return;
+		}
+
+		$order->update_meta_data( 'square_order_id', $square_order_id );
+		$order_id = $order->get_id();
+		if ( $order_id ) {
+			set_transient( 'square_order_sync_add_on_id_' . absint( $order_id ), $square_order_id, 20 * MINUTE_IN_SECONDS );
+		}
+		set_transient( 'square_order_sync_add_on_id', $square_order_id, 20 * MINUTE_IN_SECONDS );
 	}
 
 	/**

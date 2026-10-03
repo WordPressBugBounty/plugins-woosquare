@@ -32,8 +32,17 @@ class WooSquare_Sync_Logs {
 
 	/**
 	 * Sync logs scripts function.
+	 * Only enqueues on the Sync Logs admin page to avoid exposing the nonce on other wp-admin pages.
+	 *
+	 * @param string $hook_suffix The current admin page hook.
 	 */
-	public function sync_log_scripts() {
+	public function sync_log_scripts( $hook_suffix ) {
+		global $pagenow, $plugin_page;
+		$is_sync_log_page = ( 'square-settings_page_square-item-sync-log' === $hook_suffix )
+			|| ( 'admin.php' === $pagenow && 'square-item-sync-log' === $plugin_page );
+		if ( ! $is_sync_log_page ) {
+			return;
+		}
 		wp_register_script( 'square-sync-log', WOOSQUARE_PLUGIN_URL_LOG . '/js/SquareLogs.js?rand=' . wp_rand(), array( 'jquery' ), WOOSQUARE_VERSION, true );
 		wp_localize_script(
 			'square-sync-log',
@@ -471,10 +480,17 @@ class WooSquare_Sync_Logs {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare' ) ) );
 		}
 		global $wpdb;
+		$prepare        = 'prepare';
 		$get_results    = 'get_results';
 		$table_name     = $wpdb->prefix . WOO_SQUARE_ITEM_SYNC_LOGS_TABLE;
 		$sync_direction = isset( $_POST['sync_direction'] ) ? sanitize_text_field( wp_unslash( $_POST['sync_direction'] ) ) : '';
-		$results        = $wpdb->$get_results( "SELECT * FROM $table_name WHERE `sync_direction` = '$sync_direction' AND `enviroment` = '" . get_transient( 'is_sandbox' ) . "' ORDER BY `log_time` DESC" );
+		$enviroment     = get_transient( 'is_sandbox' );
+		$query          = $wpdb->$prepare(
+			"SELECT * FROM {$table_name} WHERE sync_direction = %s AND enviroment = %s ORDER BY log_time DESC",
+			$sync_direction,
+			$enviroment
+		);
+		$results        = $wpdb->$get_results( $query );
 
 		if ( isset( $results ) ) {
 			$html = '';

@@ -3,16 +3,14 @@
  * Plugin Name: WC Shop Sync - Connect Square with WooCommerce
  * Requires Plugins: woocommerce
  * Plugin URI: https://wcshopsync.com/
- * Requires at least: 6.7	
- * Tested up to: 6.7
- * Requires PHP: 7.4
- * PHP tested up to: 8.3
  * Description: WC Shop Sync purpose is to migrate & synchronize data (sales customers-invoices-products inventory) between Square system point of sale & WooCommerce plug-in.
- * Version: 4.6.0
+ * Version: 4.7.6
  * Author: Wpexpertsio
  * Author URI: https://wpexperts.io/
  * License: GPLv2 or later
  * Text Domain: woosquare
+ * Requires at least: 6.7	
+ * Requires PHP: 7.4
  *
  * @package Woosquare_Plus
  */
@@ -185,12 +183,14 @@ require plugin_dir_path( __FILE__ ) . 'includes/class-woosquare-plus.php';
  * @since    1.0.0
  */
 function run_woosquare_plus() {
-
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		return;
+	}
 	$plugin = new Woosquare_Plus();
 	$plugin->run();
 }
 
-add_action( 'init', 'run_woosquare_plus', 0 );
+add_action( 'plugins_loaded', 'run_woosquare_plus', 20 );
 
 use Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry;
 $activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ), true );

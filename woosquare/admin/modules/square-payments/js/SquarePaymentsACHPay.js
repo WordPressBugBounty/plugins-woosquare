@@ -161,17 +161,19 @@
         if(jQuery('form.wc-block-checkout__form').length > 0) { 
             var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html();
             var total = id_of_div.split(square_ach_params.currency_sym)[1];
+            // Remove comma before parseFloat to handle values like "3,621.00"
+            total = total.replace(",", "");
             var total_price = parseFloat(total) * 100;
-            // var total = total.substring(1, total.length);
-            // var total_price = total.toString();
+           
         }else{
             var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount').html();
             var total = id_of_div.split("span")[2];
             var total = total.substring(1, total.length);
-            var total_price = total.toString();
-            var total_price = parseFloat(total_price) * 100;
-        }
-		var total_price = total_price.toString().replace(",", ""); 
+            // Extract just the numeric value, removing $, commas, and any trailing HTML
+            total = total.replace(/[^0-9.,]/g, ''); // Remove all non-numeric except . and ,
+            total = total.replace(",", ""); // Remove comma before parseFloat
+            var total_price = parseFloat(total) * 100;
+        } 
         return { 
             accountHolderName,
             intent: 'CHARGE',
@@ -243,7 +245,6 @@
             const $achDiv = jQuery('.ach-button-div');
 
             if ($achDiv.length > 0) {
-                console.log("✅ .ach-button-div found, initializing ACH...");
 
                 clearInterval(pollACHInit); // ✅ Stop interval
 

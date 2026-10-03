@@ -87,7 +87,42 @@ const Content = ({RenderedComponent,  ...props}) => {
                 async() => {
                 // Here we can do any processing we need, and then emit a response.
                     // For example, we might validate a custom field, or perform an AJAX request, and then emit a response indicating it is valid or not.
-                    const square_nonce = jQuery('.square-nonce').val();
+                    // WSSS-416: wait for card nonce OR terminal term_checkout_id (matches build/index.js).
+                    const waitForNonce = () => {
+                        return new Promise((resolve, reject) => {
+                            const timeout = 10000;
+                            const intervalTime = 100;
+                            let elapsed = 0;
+                            const interval = setInterval(() => {
+                                const square_nonce = jQuery('.square-nonce').val();
+                                const term_checkout_id = jQuery('.term_checkout_id').val();
+                                if (term_checkout_id && term_checkout_id.length > 0) {
+                                    clearInterval(interval);
+                                    resolve(square_nonce || '');
+                                    return;
+                                }
+                                if (square_nonce && square_nonce.length > 0) {
+                                    clearInterval(interval);
+                                    resolve(square_nonce);
+                                    return;
+                                }
+                                elapsed += intervalTime;
+                                if (elapsed >= timeout) {
+                                    clearInterval(interval);
+                                    reject(new Error('Timeout waiting for square_nonce'));
+                                }
+                            }, intervalTime);
+                        });
+                    };
+                    let square_nonce = '';
+                    try {
+                        square_nonce = await waitForNonce();
+                    } catch (error) {
+                        return {
+                            type: emitResponse.responseTypes.ERROR,
+                            message: 'There was an error while waiting for Square token.',
+                        };
+                    }
                 const square_customerId = jQuery('.square-customerId').val() || '';
                 const term_checkout_id = jQuery('.term_checkout_id').val() || '';
                 const saved_cards = jQuery('#saved_cards').val() || '';

@@ -51,7 +51,6 @@ class WooSquare_Payments {
 		add_action( 'wp_ajax_saved_card_charge', array( $this, 'saved_card_charge' ) );
 		add_action( 'wp_ajax_nopriv_saved_card_charge', array( $this, 'saved_card_charge' ) );
 		add_action( 'wp_ajax_get_saved_token_card_id', array( $this, 'get_saved_token_card_id' ) );
-		add_action( 'wp_ajax_nopriv_get_saved_token_card_id', array( $this, 'get_saved_token_card_id' ) );
 		add_action( 'cancelled_orphened_order', array( $this, 'cancelled_orphened_order_callback' ) );
 		add_action( 'wp_ajax_my_ajax_get_pos_action', array( $this, 'my_ajax_get_pos_action_callback' ) );
 		add_action( 'wp_ajax_nopriv_terminal_pay_process', array( $this, 'funct_terminal_pay_process' ) );
@@ -105,16 +104,8 @@ class WooSquare_Payments {
 			if ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
 				define( 'SQUARE_APPLICATION_ID', WOOSQU_PLUS_APPID );
 			}
-			if ( ! defined( 'WOOSQU_ENABLE_STAGING' ) ) {
-				define( 'WOOSQU_ENABLE_STAGING', true );
-			}
-		} else {
-			if ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
+		} elseif ( ! defined( 'SQUARE_APPLICATION_ID' ) ) {
 				define( 'SQUARE_APPLICATION_ID', WOOSQU_PLUS_APPID );
-			}
-			if ( ! defined( 'WOOSQU_ENABLE_STAGING' ) ) {
-				define( 'WOOSQU_ENABLE_STAGING', false );
-			}
 		}
 
 		// include square lib.
@@ -252,11 +243,14 @@ class WooSquare_Payments {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
 		$woocommerce_square_terminal_pay_settings = get_option( 'woocommerce_square_terminal_pay' . get_transient( 'is_sandbox' ) . '_settings' );
-		$devicecode                               = $woocommerce_square_terminal_pay_settings['device_id'];
-		$woo_currency_code                        = get_option( 'woocommerce_currency' );
-		$token                                    = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
-		$url                                      = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . ".com/v2/devices/codes/$devicecode";
-		$headers                                  = array(
+		$devicecode                               = '';
+		if ( is_array( $woocommerce_square_terminal_pay_settings ) && ! empty( $woocommerce_square_terminal_pay_settings['device_id'] ) ) {
+			$devicecode = $woocommerce_square_terminal_pay_settings['device_id'];
+		}
+		$woo_currency_code = get_option( 'woocommerce_currency' );
+		$token             = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		$url               = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . ".com/v2/devices/codes/$devicecode";
+		$headers           = array(
 			'Accept'        => 'application/json',
 			'Authorization' => 'Bearer ' . $token,
 			'Content-Type'  => 'application/json',
@@ -277,9 +271,22 @@ class WooSquare_Payments {
 			)
 		);
 		if ( isset( $_POST['pay_form'] ) ) {
-			$pay_form_raw = array_map( 'sanitize_text_field', wp_unslash( $_POST['pay_form'] ) );
-			parse_str( $pay_form_raw, $output );
+			$pay_form_raw = wp_unslash( $_POST['pay_form'] );
+			if ( is_array( $pay_form_raw ) ) {
+				$output = array_map( 'sanitize_text_field', $pay_form_raw );
+			} else {
+				parse_str( (string) $pay_form_raw, $output );
+				$output = is_array( $output ) ? array_map( 'sanitize_text_field', $output ) : array();
+			}
+		} else {
+			$output = array();
 		}
+
+		// Ensure essential billing fields are present; fallback to current user.
+		$user                         = wp_get_current_user();
+		$output['billing_first_name'] = isset( $output['billing_first_name'] ) && ! empty( $output['billing_first_name'] ) ? $output['billing_first_name'] : $user->user_nicename;
+		$output['billing_last_name']  = isset( $output['billing_last_name'] ) && ! empty( $output['billing_last_name'] ) ? $output['billing_last_name'] : '';
+		$output['billing_email']      = isset( $output['billing_email'] ) && ! empty( $output['billing_email'] ) ? $output['billing_email'] : $user->user_email;
 
 		$location_id = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 
@@ -425,9 +432,7 @@ class WooSquare_Payments {
 	 * Processes the checkout for a terminal payment using Square's API.
 	 *
 	 * This function retrieves the status of a terminal checkout using Square's API
-	 * and returns the result in JSON format. It uses the token provided in the GET
-	 * parameters for authorization and fetches the checkout ID from the WordPress
-	 * options.
+	 * and returns the result in JSON format. Uses the stored merchant token server-side only.
 	 *
 	 * @return void
 	 */
@@ -435,39 +440,36 @@ class WooSquare_Payments {
 		if ( ! isset( $_GET['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
-		if ( ! isset( $_GET['token'] ) ) {
-			$token   = sanitize_text_field( wp_unslash( $_GET['token'] ) );
-			$headers = array(
-				'Accept'        => 'application/json',
-				'Authorization' => 'Bearer ' . $token,
-				'Content-Type'  => 'application/json',
-				'Cache-Control' => 'no-cache',
-			);
+		$token   = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		$headers = array(
+			'Accept'        => 'application/json',
+			'Authorization' => 'Bearer ' . $token,
+			'Content-Type'  => 'application/json',
+			'Cache-Control' => 'no-cache',
+		);
 
-			$checkout_id = get_option( 'terminal_checkout_id' );
-			$url         = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/terminals/checkouts/' . $checkout_id;
+		$checkout_id = get_option( 'terminal_checkout_id' );
+		$url         = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/terminals/checkouts/' . $checkout_id;
 
-			$result = json_decode(
-				wp_remote_retrieve_body(
-					wp_remote_get(
-						$url,
-						array(
-							'method'      => 'GET',
-							'headers'     => $headers,
-							'httpversion' => '1.0',
-							'sslverify'   => false,
-						)
+		$result = json_decode(
+			wp_remote_retrieve_body(
+				wp_remote_get(
+					$url,
+					array(
+						'method'      => 'GET',
+						'headers'     => $headers,
+						'httpversion' => '1.0',
+						'sslverify'   => false,
 					)
 				)
-			);
-			echo wp_json_encode(
-				array(
-					'result'      => 'Result_Status',
-					'result_info' => $result,
-				)
-			);
-
-		}
+			)
+		);
+		echo wp_json_encode(
+			array(
+				'result'      => 'Result_Status',
+				'result_info' => $result,
+			)
+		);
 
 		wp_die();
 	}
@@ -483,7 +485,7 @@ class WooSquare_Payments {
 	 */
 	public function my_ajax_get_pos_action_callback() {
 
-		if ( ! isset( $_POST['nonce'] ) && ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'POSTerminal' ) ) {
+		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'POSTerminal' ) ) {
 			wp_die( esc_html__( 'Unauthorized Request', 'woosquare' ) );
 		}
 		$token           = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
@@ -703,36 +705,28 @@ class WooSquare_Payments {
 		if ( ! isset( $_POST['cancel_terminal_checkout_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cancel_terminal_checkout_nonce'] ) ), 'cancel-terminal-checkout' ) ) {
 			wp_die( esc_html__( 'Unauthorized Request', 'woosquare' ) );
 		}
-		if ( ! isset( $_POST['token'] ) ) {
-			$token           = sanitize_text_field( wp_unslash( $_POST['token'] ) );
-			$idempotency_key = time();
-			$checkout_id     = get_option( 'terminal_checkout_id' );
-			$url             = 'https://connect.squareup.com/v2/terminals/checkouts/' . $checkout_id . '/cancel';
+		$token       = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		$checkout_id = get_option( 'terminal_checkout_id' );
+		$url         = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/terminals/checkouts/' . $checkout_id . '/cancel';
 
-			$headers =
+		$headers = array(
+			'Accept'         => 'application/json',
+			'Authorization'  => 'Bearer ' . $token,
+			'Content-Type'   => 'application/json',
+			'Square-Version' => '2021-03-17',
+			'Cache-Control'  => 'no-cache',
+		);
+
+		wp_remote_post(
+			$url,
 			array(
-				'Accept'         => 'application/json',
-				'Authorization'  => 'Bearer ' . $token,
-				'Content-Type'   => 'application/json',
-				'Square-Version' => '2021-03-17',
-				'Cache-Control'  => 'no-cache',
-			);
-
-			$checkout_cancel = json_decode(
-				wp_remote_retrieve_body(
-					wp_remote_post(
-						$url,
-						array(
-							'method'      => 'POST',
-							'headers'     => $headers,
-							'httpversion' => '1.0',
-							'sslverify'   => false,
-							'body'        => $checkout_cancel,
-						)
-					)
-				)
-			);
-		}
+				'method'      => 'POST',
+				'headers'     => $headers,
+				'httpversion' => '1.0',
+				'sslverify'   => false,
+				'body'        => '{}',
+			)
+		);
 		wp_die();
 	}
 
@@ -749,16 +743,18 @@ class WooSquare_Payments {
 			return false;
 		}
 
-		$path              = untrailingslashit( wc_clean( sanitize_text_field( wp_unslash( $_SERVER['DOCUMENT_ROOT'] ) ) ) );
-		$dir               = '.well-known';
-		$file              = 'apple-developer-merchantid-domain-association';
-		$fullpath          = $path . '/' . $dir . '/' . $file;
-		$plugin_path       = WOO_SQUARE_PLUS_PLUGIN_PATH . '/admin/modules/square-payments/verification';
-		$get_content       = 'file_get_contents';
-		$existing_contents = $get_content( $fullpath );
-		$new_contents      = $get_content( $plugin_path . '/' . $file );
+		$path        = untrailingslashit( wc_clean( sanitize_text_field( wp_unslash( $_SERVER['DOCUMENT_ROOT'] ) ) ) );
+		$dir         = '.well-known';
+		$file        = 'apple-developer-merchantid-domain-association';
+		$fullpath    = $path . '/' . $dir . '/' . $file;
+		$plugin_path = WOO_SQUARE_PLUS_PLUGIN_PATH . '/admin/modules/square-payments/verification';
+		$plugin_file = $plugin_path . '/' . $file;
+		$get_content = 'file_get_contents';
+		// Avoid PHP warnings when the domain association file is not present yet.
+		$existing_contents = file_exists( $fullpath ) ? $get_content( $fullpath ) : false;
+		$new_contents      = file_exists( $plugin_file ) ? $get_content( $plugin_file ) : false;
 
-		if ( false !== $existing_contents && $new_contents === $existing_contents ) {
+		if ( false !== $existing_contents && false !== $new_contents && $new_contents === $existing_contents ) {
 			return true;
 		}
 
@@ -769,7 +765,7 @@ class WooSquare_Payments {
 			}
 		}
 
-		if ( ! copy( $plugin_path . '/' . $file, $fullpath ) ) {
+		if ( ! file_exists( $plugin_file ) || ! copy( $plugin_file, $fullpath ) ) {
 			$this->log( 'Unable to copy domain association file to domain root.' );
 			return false;
 		}
@@ -841,6 +837,9 @@ class WooSquare_Payments {
 		update_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings', $arraytosave_serialize );
 
 		$woocommerce_square_google_pay_settings = get_option( 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_google_pay_settings ) ) {
+			$woocommerce_square_google_pay_settings = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_google_pay_settings['enabled'] = 'yes';
 
@@ -850,6 +849,9 @@ class WooSquare_Payments {
 		update_option( 'woocommerce_square_google_pay' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_google_pay_settings );
 
 		$woocommerce_square_after_pay_settings = get_option( 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_after_pay_settings ) ) {
+			$woocommerce_square_after_pay_settings = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_after_pay_settings['enabled'] = 'yes';
 
@@ -859,6 +861,9 @@ class WooSquare_Payments {
 		update_option( 'woocommerce_square_after_pay' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_after_pay_settings );
 
 		$woocommerce_square_cash_app_pay_settings = get_option( 'woocommerce_square_cash_app_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_cash_app_pay_settings ) ) {
+			$woocommerce_square_cash_app_pay_settings = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_cash_app_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_cash_app_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_cash_app_pay_settings['enabled'] = 'yes';
 
@@ -868,6 +873,9 @@ class WooSquare_Payments {
 		update_option( 'woocommerce_square_cash_app_pay' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_cash_app_pay_settings );
 
 		$woocommerce_square_ach_payment_settings = get_option( 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_ach_payment_settings ) ) {
+			$woocommerce_square_ach_payment_settings = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_ach_payment_settings['enabled'] = 'yes';
 
@@ -877,6 +885,9 @@ class WooSquare_Payments {
 		update_option( 'woocommerce_square_ach_payment' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_ach_payment_settings );
 
 		$woocommerce_square_pos_setting = get_option( 'woocommerce_square_terminal_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_pos_setting ) ) {
+			$woocommerce_square_pos_setting = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_pos' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_pos' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_pos_setting['enabled'] = 'yes';
 
@@ -885,6 +896,10 @@ class WooSquare_Payments {
 		}
 		update_option( 'woocommerce_square_terminal_pay' . get_transient( 'is_sandbox' ) . '_settings', $woocommerce_square_pos_setting );
 
+		$woocommerce_square_apple_pay_settings = get_option( 'woocommerce_square_apple_pay' . get_transient( 'is_sandbox' ) . '_settings' );
+		if ( ! is_array( $woocommerce_square_apple_pay_settings ) ) {
+			$woocommerce_square_apple_pay_settings = array();
+		}
 		if ( ! empty( $_POST[ 'woocommerce_square_apple_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) && '1' === $_POST[ 'woocommerce_square_apple_pay' . get_transient( 'is_sandbox' ) . '_enabled' ] ) {
 			$woocommerce_square_apple_pay_settings['enabled'] = 'yes';
 
@@ -1088,50 +1103,95 @@ class WooSquare_Payments {
 	 * @return void
 	 */
 	public function get_saved_token_card_id() {
+		// Require user authentication
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Authentication required.', 'woosquare-square' ) ), 401 );
+		}
+
+		// Verify nonce
 		if ( ! isset( $_POST['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
-			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
+			wp_send_json_error( array( 'message' => esc_html__( 'Security check failed.', 'woosquare-square' ) ), 403 );
 		}
-		if ( isset( $_POST['saved_token'] ) ) {
-			$token             = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
-			$token_id          = wc_clean( sanitize_text_field( wp_unslash( $_POST['saved_token'] ) ) );
-			$wc_payment_tokens = WC_Payment_Tokens::get( $token_id );
-			if ( isset( $wc_payment_tokens ) ) {
-				$customer_card_id = $wc_payment_tokens->get_token();
-			}
-			if ( isset( $customer_card_id ) ) {
-				$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/cards/' . $customer_card_id;
 
-				$headers = array(
-					'Accept'        => 'application/json',
-					'Authorization' => 'Bearer ' . $token,
-					'Content-Type'  => 'application/json',
-					'Cache-Control' => 'no-cache',
-				);
-				$result  = json_decode(
-					wp_remote_retrieve_body(
-						wp_remote_post(
-							$url,
-							array(
-								'method'      => 'GET',
-								'headers'     => $headers,
-								'httpversion' => '1.0',
-								'sslverify'   => false,
-							)
-						)
-					)
-				);
-
-				if ( isset( $result->card->id ) ) {
-							$customer_id = $result->card->customer_id;
-				}
-			}
-			$data = array(
-				'customer_id' => $customer_id,
-				'card_id'     => $result->card->id,
-			);
-			echo wp_json_encode( $data );
+		if ( ! isset( $_POST['saved_token'] ) || empty( $_POST['saved_token'] ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Token ID is required.', 'woosquare-square' ) ), 400 );
 		}
-		die();
+
+		$token_id = wc_clean( sanitize_text_field( wp_unslash( $_POST['saved_token'] ) ) );
+
+		if ( ! $token_id || ! is_numeric( $token_id ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Invalid token ID.', 'woosquare-square' ) ), 400 );
+		}
+
+		// Get payment token
+		$wc_payment_tokens = WC_Payment_Tokens::get( $token_id );
+
+		// Verify token exists
+		if ( ! $wc_payment_tokens || ! is_object( $wc_payment_tokens ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Token not found.', 'woosquare-square' ) ), 404 );
+		}
+
+		// CRITICAL SECURITY FIX: Verify token ownership
+		$current_user_id = get_current_user_id();
+		$token_user_id   = $wc_payment_tokens->get_user_id();
+
+		if ( $current_user_id !== $token_user_id ) {
+			// Only allow admins with proper capability to access other users' tokens
+			// phpcs:ignore WordPress.WP.Capabilities.Unknown -- Custom capability used by WooCommerce.
+			if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'edit_user', $token_user_id ) ) {
+				wp_send_json_error( array( 'message' => esc_html__( 'Access denied. You can only access your own payment tokens.', 'woosquare-square' ) ), 403 );
+			}
+		}
+
+		// Get the Square card ID from token
+		$customer_card_id = $wc_payment_tokens->get_token();
+
+		if ( empty( $customer_card_id ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Invalid token data.', 'woosquare-square' ) ), 400 );
+		}
+
+		// Fetch card details from Square API
+		$token = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+
+		if ( empty( $token ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Square API token not configured.', 'woosquare-square' ) ), 500 );
+		}
+
+		$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/cards/' . $customer_card_id;
+
+		$headers = array(
+			'Accept'        => 'application/json',
+			'Authorization' => 'Bearer ' . $token,
+			'Content-Type'  => 'application/json',
+			'Cache-Control' => 'no-cache',
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'headers'     => $headers,
+				'httpversion' => '1.0',
+				'sslverify'   => false,
+				'timeout'     => 30,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Failed to fetch card details from Square.', 'woosquare-square' ) ), 500 );
+		}
+
+		$result = json_decode( wp_remote_retrieve_body( $response ) );
+
+		if ( ! isset( $result->card->id ) || ! isset( $result->card->customer_id ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Invalid card data received from Square.', 'woosquare-square' ) ), 400 );
+		}
+
+		$data = array(
+			'customer_id' => $result->card->customer_id,
+			'card_id'     => $result->card->id,
+		);
+
+		wp_send_json_success( $data );
 	}
 
 	/**
@@ -1147,16 +1207,37 @@ class WooSquare_Payments {
 		if ( ! isset( $_POST['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
-		$token = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+
+		$token  = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		$output = array();
+
+		// Fix: Properly handle pay_form data.
 		if ( ! empty( $_POST['pay_form'] ) ) {
-			$pay_form_raw = array_map( 'sanitize_text_field', wp_unslash( $_POST['pay_form'] ) ); // phpcs:ignore
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Will be sanitized after parse_str.
+			$pay_form_raw = wp_unslash( $_POST['pay_form'] );
 			parse_str( $pay_form_raw, $output );
+
+			if ( ! is_array( $output ) ) {
+				$output = array();
+			}
+
+			// Fix: Properly decode URL-encoded email addresses and sanitize.
+			if ( isset( $output['billing_email'] ) ) {
+				$output['billing_email'] = sanitize_email( urldecode( $output['billing_email'] ) );
+			}
+
+			// Sanitize other fields.
+			foreach ( $output as $key => $value ) {
+				if ( 'billing_email' !== $key ) {
+					$output[ $key ] = sanitize_text_field( $value );
+				}
+			}
 		}
+
 		$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
 		$location_id                      = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 
-		$card_nonce               = isset( $_POST['card_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['card_nonce'] ) ) : '';
-		$buyer_verification_token = isset( $_POST['verification_token'] ) ? sanitize_text_field( wp_unslash( $_POST['verification_token'] ) ) : '';
+		$card_nonce = isset( $_POST['card_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['card_nonce'] ) ) : '';
 
 		$billing_address_1 = ( isset( $output['billing_address_1'] ) ) ? $output['billing_address_1'] : '';
 		$billing_address_2 = ( isset( $output['billing_address_2'] ) ) ? $output['billing_address_2'] : '';
@@ -1172,8 +1253,9 @@ class WooSquare_Payments {
 			'administrative_district_level_1' => ( isset( $output['shipping_state'] ) ) ? $output['shipping_state'] : $billing_state,
 			'postal_code'                     => ( isset( $output['shipping_postcode'] ) ) ? $output['shipping_postcode'] : $billing_postcode,
 		);
-		$url              = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/customers/search';
-		$headers          = array(
+
+		$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/customers/search';
+		$headers = array(
 			'Accept'        => 'application/json',
 			'Authorization' => 'Bearer ' . $token,
 			'Content-Type'  => 'application/json',
@@ -1190,27 +1272,26 @@ class WooSquare_Payments {
 			),
 		);
 
-		$search_customer = json_decode(
-			wp_remote_retrieve_body(
-				wp_remote_post(
-					$url,
-					array(
-						'method'      => 'POST',
-						'headers'     => $headers,
-						'httpversion' => '1.0',
-						'sslverify'   => false,
-						'body'        => wp_json_encode( $customer_data ),
-					)
-				)
+		$search_response = wp_remote_post(
+			$url,
+			array(
+				'method'      => 'POST',
+				'headers'     => $headers,
+				'httpversion' => '1.0',
+				'sslverify'   => false,
+				'body'        => wp_json_encode( $customer_data ),
 			)
 		);
 
-		$user = wp_get_current_user();
+		$search_customer = json_decode( wp_remote_retrieve_body( $search_response ) );
+
+		$user               = wp_get_current_user();
+		$square_customer_id = '';
+
 		if ( ! empty( $search_customer->customers[0]->id ) ) {
 			$square_customer_id = $search_customer->customers[0]->id;
 			update_user_meta( $user->ID, '_square_customer_id', $square_customer_id );
 		} else {
-
 			$customer_id = wp_rand();
 			$body        = array(
 				'given_name'    => isset( $output['shipping_first_name'] ) ? $output['shipping_first_name'] : $output['billing_first_name'],
@@ -1224,7 +1305,7 @@ class WooSquare_Payments {
 			$url     = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/customers';
 			$headers = array(
 				'Accept'        => 'application/json',
-				'Authorization' => 'Bearer ' . $token, // Replace with your token.
+				'Authorization' => 'Bearer ' . $token,
 				'Content-Type'  => 'application/json',
 				'Cache-Control' => 'no-cache',
 			);
@@ -1247,24 +1328,42 @@ class WooSquare_Payments {
 				if ( ! empty( $square_customer_id ) ) {
 					update_user_meta( $user->ID, '_square_customer_id', $square_customer_id );
 				}
+			} else {
+				// If customer creation fails, we'll still try to create the card without customer_id.
+				$square_customer_id = '';
 			}
 		}
+
 		$billing_first_name = isset( $output['billing_first_name'] ) ? $output['billing_first_name'] : '';
 		$billing_last_name  = isset( $output['billing_last_name'] ) ? $output['billing_last_name'] : '';
-		if ( ( ! isset( $output['saved_cards'] ) && isset( $output['square_plussq-card-saved'] ) && 'on' === $output['square_plussq-card-saved'] && ! empty( $square_customer_id ) )
+
+		// Initialize variables to prevent undefined variable errors.
+		$card_id = '';
+		$message = '';
+		$data    = array(
+			'customer_id' => $square_customer_id,
+			'card_id'     => '',
+			'message'     => '',
+		);
+
+		if ( ( ! isset( $output['saved_cards'] ) && isset( $output['square_plussq-card-saved'] ) && 'on' === $output['square_plussq-card-saved'] )
 			|| isset( $_POST['subscription'] )
 		) {
 
 			$idempotency_key = uniqid();
-			$body            = array(
-				'card'               => array(
-					'cardholder_name' => $billing_first_name . ' ' . $billing_last_name,
-					'customer_id'     => $square_customer_id,
-				),
-				'idempotency_key'    => (string) $idempotency_key,
-				'source_id'          => $card_nonce,
-				'verification_token' => $buyer_verification_token,
+			$card_data       = array(
+				'cardholder_name' => $billing_first_name . ' ' . $billing_last_name,
+			);
 
+			// Only add customer_id if we have one.
+			if ( ! empty( $square_customer_id ) ) {
+				$card_data['customer_id'] = $square_customer_id;
+			}
+
+			$body = array(
+				'card'            => $card_data,
+				'idempotency_key' => (string) $idempotency_key,
+				'source_id'       => $card_nonce,
 			);
 
 			$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/cards';
@@ -1276,7 +1375,8 @@ class WooSquare_Payments {
 				'Square-Version' => '2021-12-15',
 				'Cache-Control'  => 'no-cache',
 			);
-			$result  = json_decode(
+
+			$result = json_decode(
 				wp_remote_retrieve_body(
 					wp_remote_post(
 						$url,
@@ -1290,6 +1390,7 @@ class WooSquare_Payments {
 					)
 				)
 			);
+
 			if ( isset( $result->card->id ) ) {
 				$card_id = $result->card->id;
 
@@ -1315,9 +1416,10 @@ class WooSquare_Payments {
 			$data = array(
 				'customer_id' => $square_customer_id,
 				'card_id'     => $card_id,
-				'message'     => isset( $message ) ? $message : '',
+				'message'     => $message,
 			);
 		}
+
 		echo wp_json_encode( $data );
 		die();
 	}

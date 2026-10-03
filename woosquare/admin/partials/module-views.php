@@ -227,7 +227,8 @@
 					</div>
 						<?php
 					}
-					if ( ! $module['is_premium'] ) {
+					if ( isset( $module ) && ( ! isset( $module['is_premium'] ) || ! $module['is_premium'] ) ) {
+
 						?>
 
 						<div class="switchWrap">
@@ -261,7 +262,10 @@
 								<label
 									class="onoffswitch-label_"
 									for="myonoffswitch_">
-									<span class="extonoff onoffswitch-inner_"><a target="_blank" class="btn get-plus-btn waves-effect waves-light btn-rounded btn-primary" href="<?php echo esc_url( 'https://apiexperts.io/solutions/woosquare-plus/?utm_source=plugin&utm_medium=addons&utm_campaign=' . $module['module_slug'] ); ?>">Upgrade to Plus</a></span>
+									<?php
+									$campaign_slug = ! empty( $module['module_slug'] ) ? $module['module_slug'] : ( ! empty( $key ) ? $key : 'wc-shop-sync' );
+									?>
+									<span class="extonoff onoffswitch-inner_"><a target="_blank" class="btn get-plus-btn waves-effect waves-light btn-rounded btn-primary" href="<?php echo esc_url( 'https://wcshopsync.com/pricing/?utm_source=plugin&utm_medium=addon&utm_campaign=' . $campaign_slug ); ?>">Upgrade to Plus</a></span>
 								  
 								</label>
 							</div>
@@ -441,12 +445,10 @@
 
 <script>
 	jQuery(document).ready(function () {
-		// Gets the video src from the data-src on each button
-		var videoSrc;
-		//console.log(videoSrc);
-		jQuery('.videoBtn').click(function () {
-		videoSrc = jQuery(this).attr("href");
-		//console.log(videoSrc);
+	// Gets the video src from the data-src on each button
+	var videoSrc;
+	jQuery('.videoBtn').click(function () {
+	videoSrc = jQuery(this).attr("href");
 		});
 
 
@@ -457,12 +459,11 @@
 		jQuery("#video").attr('src', videoSrc + "?autoplay=1&amp;modestbranding=1&amp;showinfo=0");
 		})
 
-		// stop playing the youtube video when I close the modal
-		jQuery('#myModal').on('hide.bs.modal', function (e) {
-		// a poor man's stop video
-		jQuery("#video").attr('src', videoSrc);
-		//console.log(videoSrc);
-		})
+	// stop playing the youtube video when I close the modal
+	jQuery('#myModal').on('hide.bs.modal', function (e) {
+	// a poor man's stop video
+	jQuery("#video").attr('src', videoSrc);
+	})
 		// document ready  
 	});
 

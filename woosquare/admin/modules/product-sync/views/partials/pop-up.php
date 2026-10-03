@@ -17,7 +17,7 @@
 		<div class="sync-data-by-category">
 			<label>  
 				<span class="category-toggle-text"><?php echo esc_html__( 'Sync Products Based on Categories', 'woosquare' ); ?></span>
-				<input type="checkbox" class="category-toggle" role="switch" value/>
+				<input type="checkbox" class="category-toggle" role="switch" value="" <?php echo 'true' === $category_checked ? 'checked="checked"' : ''; ?>>
 			</label>
 		</div>
 	<?php } ?>
@@ -94,7 +94,7 @@
 						<h3><?php echo esc_html__( 'Sync/Update.' ); ?></h3>
 						<div class="square-update ">
 						<div class='square-action update_products_action'>
-							<input name='woo_square_product' type='checkbox' value='update_products' checked />Update other products
+							<input name='woo_square_product' type='checkbox' value='update_products'  />Update other products
 						</div>
 						</div>
 					<?php else : ?>           

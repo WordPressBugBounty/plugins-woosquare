@@ -86,7 +86,6 @@
                 return true;
             }
             unblock_checkout();
-            window.setExtensionData('woosquare-giftcard', 'add_gift_box', jQuery("#add_gift_box").val());
         }
     }
 
@@ -159,21 +158,19 @@
             
 
 
-            async function handlePaymentMethodSubmissiongftcpay(event, paymentMethod)
-            {
+        async function handlePaymentMethodSubmissiongftcpay(event, paymentMethod)
+        {
 
-                //console.log(paymentMethod);
-                //debugger;
-                event.preventDefault();
+            //debugger;
+            event.preventDefault();
 
                 try {
-                    // disable the submit button as we await tokenization and make a
-                    // payment request.
-                    const token = await tokenize(paymentMethod);
-                    if(token) {
-                        //console.log(token);
+                // disable the submit button as we await tokenization and make a
+                // payment request.
+                const token = await tokenize(paymentMethod);
+                if(token) {
 
-                        //var $form = jQuery( 'form.woocommerce-checkout, form#order_review' );
+                    //var $form = jQuery( 'form.woocommerce-checkout, form#order_review' );
                         // inject nonce to a hidden field to be submitted
                         /*$form.append( '<input type="hidden" class="errors" name="errors" value="' + errors + '" />' );
                         $form.append( '<input type="hidden" class="noncedatatype" name="noncedatatype" value="' + noncedatatype + '" />' );
@@ -201,11 +198,10 @@
                                     nonce:token,
                                     currency_code: squaregiftcardcoupenpay_params.currency_code,
                                     square_pay_nonce: squaregiftcardcoupenpay_params.square_pay_nonce
-                                },
-                                success:function (res) {
+                            },
+                            success:function (res) {
 
-                                      //console.log(res);
-                                      var response = jQuery.parseJSON(res);
+                                  var response = jQuery.parseJSON(res);
                                     if (response.payment.status !== undefined && response.payment.status === "FAILED") {
                                         var html = 'Card denied:' + response.errors[0].code;
                                         jQuery('.woowoosquare_gift_card_coupen_code_notices').eq(0).text(html.replace(/_/g, ' '));
@@ -267,15 +263,13 @@
 
                     }
 
-                    /*cardButton.disabled = true;
-                     displayPaymentResults('SUCCESS');*/
+                /*cardButton.disabled = true;
+                 displayPaymentResults('SUCCESS');*/
 
-                    //console.log('TK: ' + token);
-                    //const paymentResults = await createPayment(token);
-                    //console.debug('Payment Success', paymentResults);
-                } catch (e) {
-                    console.error(e.message);
-                    jQuery('.woowoosquare_gift_card_coupen_code_notices').eq(0).text(e.message);
+				//const paymentResults = await createPayment(token);
+            } catch (e) {
+                console.error(e.message);
+                jQuery('.woowoosquare_gift_card_coupen_code_notices').eq(0).text(e.message);
                     jQuery('.woowoosquare_gift_card_coupen_code_notices').show();
                     jQuery('#woosquare_get_cart_redeem_send').text('Apply');
                 }
@@ -287,20 +281,19 @@
             }
 			let giftCard; // Declare at top
 
-			const pollGiftCardInit = setInterval(async () => {
-				const $giftCardInput = jQuery('#sq-gift-card-coupen');
+		const pollGiftCardInit = setInterval(async () => {
+			const $giftCardInput = jQuery('#sq-gift-card-coupen');
 
-				if ($giftCardInput.length > 0) {
-					console.log("✅ Gift Card field loaded, initializing...");
+			if ($giftCardInput.length > 0) {
 
-					clearInterval(pollGiftCardInit); // ✅ Stop checking
+				clearInterval(pollGiftCardInit); // ✅ Stop checking
 
-					try {
-						giftCard = await initializeGiftCard(payments);
-					} catch (e) {
-						console.error('❌ Initializing Gift Card failed:', e);
-						return;
-					}
+				try {
+					giftCard = await initializeGiftCard(payments);
+				} catch (e) {
+					console.error('❌ Initializing Gift Card failed:', e);
+					return;
+				}
 						let isSquare; 
 						if (jQuery('.wc-block-checkout').length > 0) {
 							const buttons = document.getElementsByClassName('wc-block-components-checkout-place-order-button');

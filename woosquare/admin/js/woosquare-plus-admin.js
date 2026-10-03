@@ -44,33 +44,69 @@ function cons(res)
             );
 
             jQuery('.enable_plugin').click(
-                function (e) {
+                function (e) { 
                     e.preventDefault();
-                    if (!jQuery(this).is(':checked')) {
-                           cons('checked');
-                           var data = {
-                                action: 'en_plugin',
-                                status: 'enab',
-                                pluginid: jQuery(this).attr('id'),
-                                nonce: my_ajax_backend_scripts.nonce,
-                        };
-                    } else {
-                        var data = {
-                            action: 'en_plugin',
-                            status: 'disab',
-                            pluginid: jQuery(this).attr('id'),
-                            nonce: my_ajax_backend_scripts.nonce,
-                        };
-                    }
-                    cons(data);
+                    
+                    var isChecked = jQuery(this).is(':checked');
+                    var pluginId = jQuery(this).attr('id');
+                    
+                    console.log('Toggle clicked - Checked:', isChecked);
+                    
+                    // If checkbox is CHECKED, we want to ENABLE (send 'enab')
+                    // If checkbox is UNCHECKED, we want to DISABLE (send 'disab')
+                    var status = isChecked ? 'enab' : 'disab';
+                    var actionText = isChecked ? 'ENABLE' : 'DISABLE';
+                    
+                    var data = {
+                        action: 'en_plugin',
+                        status: status,
+                        pluginid: pluginId,
+                        nonce: my_ajax_backend_scripts.nonce,
+                    };
+                    
+                    console.log('Sending AJAX - Action:', actionText, 'Status:', status);
+                    console.log('Data:', data);
+                    
                     jQuery.post(
-                        my_ajax_backend_scripts.ajax_url, data, function (response) {
-                            var response = JSON.parse(response);
-                            if(response.status) {
-                                window.location.replace(window.location.href);
+                        my_ajax_backend_scripts.ajax_url, 
+                        data, 
+                        function (response) {
+                            console.log('Raw Response:', response);
+                            
+                            // Try to parse JSON (response might have HTML debug output)
+                            try {
+                                // Extract JSON from response if HTML is present
+                                var jsonStart = response.indexOf('{');
+                                var jsonEnd = response.lastIndexOf('}') + 1;
+                                
+                                var parsedResponse;
+                                if (jsonStart !== -1 && jsonEnd > jsonStart) {
+                                    var jsonString = response.substring(jsonStart, jsonEnd);
+                                    parsedResponse = JSON.parse(jsonString);
+                                } else {
+                                    parsedResponse = JSON.parse(response);
+                                }
+                                
+                                console.log('Parsed Response:', parsedResponse);
+                                
+                                if(parsedResponse.status) {
+                                    console.log('Success! Reloading page...');
+                                    window.location.replace(window.location.href);
+                                } else {
+                                    console.error('Failed:', parsedResponse.msg);
+                                    alert('Error: ' + parsedResponse.msg);
+                                }
+                            } catch(e) {
+                                console.error('JSON Parse Error:', e);
+                                console.error('Response was:', response);
+                                alert('Error parsing response. Check console for details.');
                             }
                         }
-                    ); 
+                    ).fail(function(xhr, status, error) {
+                        console.error('AJAX Failed:', status, error);
+                        console.error('Response:', xhr.responseText);
+                        alert('AJAX Error: ' + error);
+                    }); 
                 }
             );
         

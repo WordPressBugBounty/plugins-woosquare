@@ -98,11 +98,11 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 		$is_available = true;
 
 		if ( 'yes' === $this->enabled ) {
-			if ( ! WOOSQU_ENABLE_STAGING && ! wc_checkout_is_https() ) {
+			if ( ! get_transient( 'is_sandbox' ) && ! wc_checkout_is_https() ) {
 				$is_available = false;
 			}
 
-			if ( ! WOOSQU_ENABLE_STAGING && empty( $this->token ) ) {
+			if ( ! get_transient( 'is_sandbox' ) && empty( $this->token ) ) {
 				$is_available = true;
 			}
 
@@ -227,7 +227,7 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 			<div>
 			<button id="terminal-pay-button">
 			<img class="terminal-pay-button-img" src="<?php echo esc_url( WOOSQUARE_PLUGIN_URL_PAYMENT . '/img/square.png' ); ?>" />
-			<?php echo esc_html( $payment ); ?>
+			<?php echo wp_kses_post( $payment ); ?>
 			</button>
 			<div style="display:none" id="terminal-pay-button-loader">
 			<input type="hidden" id="square_pay_nonce" name="square_pay_nonce" value="<?php echo esc_attr( wp_create_nonce( 'square-pay-nonce' ) ); ?>">
@@ -291,7 +291,6 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 		$woocommerce_square_settings = get_option( 'woocommerce_square_settings' );
 		$currency_cod                = get_option( 'woocommerce_currency' );
 		$country_code                = $this->get_country_codes( $currency_cod );
-		$access_token                = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
 		$location_id                 = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 		// need to add condition square payment enable so disable below script.
 		if ( get_transient( 'is_sandbox' ) ) {
@@ -328,7 +327,6 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 				'currency_code'    => $currency_cod,
 				'country_code'     => $country_code,
 				'nonce'            => wp_create_nonce( 'squaretpay_params' ),
-				'access_token'     => $access_token,
 				'location_id'      => $location_id,
 				'sandbox'          => get_transient( 'is_sandbox' ),
 				'square_pay_nonce' => wp_create_nonce( 'square-pay-nonce' ),
@@ -352,7 +350,6 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 		$woocommerce_square_settings = get_option( 'woocommerce_square_settings' );
 		$currency_cod                = get_option( 'woocommerce_currency' );
 		$country_code                = $this->get_country_codes( $currency_cod );
-		$access_token                = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
 		$location_id                 = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
 		// need to add condition square payment enable so disable below script.
 
@@ -363,7 +360,6 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 			array(
 				'ajax_url'      => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( 'POSTerminal' ),
-				'access_token'  => $access_token,
 				'currency_code' => $currency_cod,
 				'currency_sym'  => get_woocommerce_currency_symbol(),
 				'country_code'  => $country_code,
@@ -521,7 +517,8 @@ class WooSquarePOS_Gateway extends WC_Payment_Gateway {
 				$total = absint( $total );
 				break;
 			default:
-				$total = round( $total, 2 ) * 100; // In cents.
+				$total = round( $total, 2 );
+				$total = (int) round( $total * 100, 0 );
 				break;
 		}
 

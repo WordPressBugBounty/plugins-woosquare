@@ -92,7 +92,8 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 			->set_access_token( $this->token );
 
 		$user_agent = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '';
-		if ( stripos( $user_agent, 'Safari' ) !== false && stripos( $user_agent, 'Chrome' ) === false && stripos( $user_agent, 'Chromium' ) === false ) {
+		// Only register the hook if gateway is enabled and browser is Safari.
+		if ( 'yes' === $this->enabled && stripos( $user_agent, 'Safari' ) !== false && stripos( $user_agent, 'Chrome' ) === false && stripos( $user_agent, 'Chromium' ) === false ) {
 			add_action(
 				'wp_enqueue_scripts',
 				array(
@@ -146,11 +147,11 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 			} elseif ( stripos( $user_agent, 'Safari' ) !== false ) {
 				$is_available = true;
 			}
-			if ( ! WOOSQU_ENABLE_STAGING && ! wc_checkout_is_https() ) {
+			if ( ! get_transient( 'is_sandbox' ) && ! wc_checkout_is_https() ) {
 				$is_available = false;
 			}
 
-			if ( ! WOOSQU_ENABLE_STAGING && empty( $this->token ) ) {
+			if ( ! get_transient( 'is_sandbox' ) && empty( $this->token ) ) {
 				$is_available = true;
 			}
 
@@ -253,6 +254,10 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 	 * Payment_scripts function.
 	 */
 	public function payment_scripts_applepay() {
+		// Exit early if gateway is not enabled.
+		if ( 'yes' !== $this->enabled ) {
+			return;
+		}
 		if ( ! is_checkout() && ! is_product() && ! is_cart() ) {
 			return;
 		}
@@ -286,8 +291,17 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 			);
 		}
 		global $product;
-		if ( ! empty( $product ) ) {
-			$amount = number_format( 1 * $product->get_price(), 2, '.', '' );
+		$amount      = 0;
+		$product_obj = null;
+		// Prefer the global product when it is a valid WC_Product.
+		if ( $product instanceof WC_Product ) {
+			$product_obj = $product;
+		} elseif ( is_product() ) {
+			// If on a product page and global $product is not set/valid, try to get it properly.
+			$product_obj = wc_get_product( get_the_ID() );
+		}
+		if ( $product_obj instanceof WC_Product ) {
+			$amount = number_format( (float) $product_obj->get_price(), 2, '.', '' );
 		}
 		wp_register_script( 'woosquare-apple-pay', plugin_dir_url( __FILE__ ) . 'js/SquarePaymentsApplePay.js?apprand=' . wp_rand(), array(), WOOSQUARE_VERSION, true );
 		wp_localize_script(
@@ -351,7 +365,7 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 	 * @throws Exception If there is an error during payment capture.
 	 */
 	public function process_payment( $order_id, $retry = true ) {
-		if ( ! isset( $_POST['apple_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['apple_pay_nonce'] ) ), 'apple-pay-nonce' ) ) {
+		if ( ! isset( $_POST['square_pay_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['square_pay_nonce'] ) ), 'square-pay-nonce' ) ) {
 			wp_die( esc_html( __( 'Cheatin&#8217; huh?', 'woosquare-square' ) ) );
 		}
 		$order = wc_get_order( $order_id );
@@ -883,7 +897,8 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 				$total = absint( $total );
 				break;
 			default:
-				$total = round( $total, 2 ) * 100; // In cents.
+				$total = round( $total, 2 );
+				$total = (int) round( $total * 100, 0 );
 				break;
 		}
 
@@ -993,4 +1008,5 @@ class WooSquareApplePay_Gateway extends WC_Payment_Gateway {
 		}
 	}
 }
+
 

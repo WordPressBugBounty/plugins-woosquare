@@ -31,6 +31,81 @@ class WooToSquareSynchronizer {
 	}
 
 	/**
+	 * Prepare image binary for Square catalog upload (JPEG, PNG, GIF only).
+	 *
+	 * @param string $image_file Absolute file path.
+	 * @return array|false Array with keys body, mime, filename, label; false on failure.
+	 */
+	private function square_prepare_image_upload( $image_file ) {
+		if ( empty( $image_file ) || ! is_readable( $image_file ) ) {
+			return false;
+		}
+
+		$basename = basename( $image_file );
+		$filetype = wp_check_filetype( $basename );
+		$mime     = ! empty( $filetype['type'] ) ? $filetype['type'] : '';
+		$label    = pathinfo( $basename, PATHINFO_FILENAME );
+
+		$square_mimes = array(
+			'image/jpeg',
+			'image/png',
+			'image/gif',
+		);
+
+		if ( in_array( $mime, $square_mimes, true ) ) {
+			$get_content = 'file_get_contents';
+			$body        = $get_content( $image_file );
+			if ( empty( $body ) ) {
+				return false;
+			}
+
+			return array(
+				'body'     => $body,
+				'mime'     => $mime,
+				'filename' => $basename,
+				'label'    => $label,
+			);
+		}
+
+		if ( ! function_exists( 'wp_get_image_editor' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		$editor = wp_get_image_editor( $image_file );
+		if ( is_wp_error( $editor ) ) {
+			return false;
+		}
+
+		$temp_file = wp_tempnam( $label . '.jpg' );
+		if ( ! $temp_file ) {
+			return false;
+		}
+
+		$saved = $editor->save( $temp_file, 'image/jpeg' );
+		if ( is_wp_error( $saved ) || empty( $saved['path'] ) || ! is_readable( $saved['path'] ) ) {
+			wp_delete_file( $temp_file );
+			return false;
+		}
+
+		$get_content = 'file_get_contents';
+		$body        = $get_content( $saved['path'] );
+		if ( file_exists( $saved['path'] ) ) {
+			wp_delete_file( $saved['path'] );
+		}
+
+		if ( empty( $body ) ) {
+			return false;
+		}
+
+		return array(
+			'body'     => $body,
+			'mime'     => 'image/jpeg',
+			'filename' => $label . '.jpg',
+			'label'    => $label,
+		);
+	}
+
+	/**
 	 * Syncs a WooCommerce product's payment reporting information with Square.
 	 *
 	 * This function checks if a product's SKU exists in Square. If it does not, the product is added to Square's catalog.
@@ -75,9 +150,12 @@ class WooToSquareSynchronizer {
 
 		$response = $square->wp_remote_woosquare_v2( $url, $args, $method, $headers, $response );
 
-		$square_product = json_decode( $response['body'], false );
+		$square_product = null;
+		if ( is_array( $response ) && isset( $response['body'] ) ) {
+			$square_product = json_decode( $response['body'], false );
+		}
 
-		if ( ! empty( $response['response'] ) ) {
+		if ( is_array( $response ) && ! empty( $response['response'] ) ) {
 			if ( 200 === $response['response']['code'] && 'OK' === $response['response']['message'] ) {
 
 				if ( empty( $square_product[0]->id ) ) {
@@ -143,15 +221,19 @@ class WooToSquareSynchronizer {
 			$square_items = array();
 		}
 
-		// 1-get unsynchronized categories (add/update)
+		// 1-get unsynchronized categories (add/update).
 		$categories                            = $this->get_unsynchronized_categories();
 		$square_categories                     = $this->get_categories_square_ids( $categories );
-		$woo_square_sync_preference            = get_option( 'woo_square_sync_preference' );
-		$woo_square_auto_sync                  = get_option( 'woo_square_auto_sync' );
+		$woo_square_sync_preference            = (int) get_option( 'woo_square_sync_preference' );
+		$woo_square_auto_sync                  = (int) get_option( 'woo_square_auto_sync' );
 		$woo_square_listsaved_categories_wooco = get_option( 'woo_square_listsaved_categories_wooco' );
 		foreach ( $categories as $cat ) {
 
 			$square_id = null;
+			$result    = array(
+				'status'  => false,
+				'message' => '',
+			);
 
 			if ( 0 === $woo_square_sync_preference && 1 === $woo_square_auto_sync ) {
 				if ( in_array( $cat->term_id, $woo_square_listsaved_categories_wooco, true ) ) {
@@ -186,7 +268,7 @@ class WooToSquareSynchronizer {
 			}
 		}
 
-		// 2-get unsynchronized products (add/update)
+		// 2-get unsynchronized products (add/update).
 		$unsync_products = $this->get_unsynchronized_products();
 		$this->get_products_square_ids( $unsync_products, $excluded_products );
 		$product_ids = array( 0 );
@@ -223,7 +305,7 @@ class WooToSquareSynchronizer {
 		if ( $woocommerce_products ) {
 
 			foreach ( $woocommerce_products as $woocommerce_product ) {
-				// sleep(2);
+				// sleep(2);.
 				// check if woocommerce product sku is exists in square product sku.
 				$product_square_id = $this->check_sku_in_square( $woocommerce_product, $square_items );
 
@@ -342,7 +424,7 @@ class WooToSquareSynchronizer {
 					update_post_meta( $woocommerce_product->ID, 'is_square_sync', 1 );
 				}
 
-				// log the process
+				// log the process.
 				// check if response returned is bool or error response message.
 				$message = null;
 				if ( ! is_bool( $result ) ) {
@@ -352,7 +434,7 @@ class WooToSquareSynchronizer {
 			}
 		}
 
-		// 3-get deleted categories/products
+		// 3-get deleted categories/products.
 		$deleted_elms = $this->get_unsynchronized_deleted_elements();
 
 		$action = Helpers::ACTION_DELETE;
@@ -380,7 +462,7 @@ class WooToSquareSynchronizer {
 						array( 'square_id' => $del_element->square_id )
 					);
 				}
-				// log the process
+				// log the process.
 				// check if response returned is bool or error response message.
 				$message = null;
 				if ( ! is_bool( $result ) ) {
@@ -550,7 +632,7 @@ class WooToSquareSynchronizer {
 												foreach ( $term_query as $kgs => $term ) {
 
 													$midd = $result['catalog_object']['modifier_list_data']['modifiers'][ $kgs ]['id'];
-													$wpdb->query( // phpcs:ignore
+													$wpdb->query( // phpcs:ignore.
 														$wpdb->prepare(
 															"UPDATE {$wpdb->prefix}term_taxonomy SET description = %s WHERE term_id = %d",
 															$midd,
@@ -613,7 +695,7 @@ class WooToSquareSynchronizer {
 									)
 								);
 
-								if ( 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
+								if ( ! is_wp_error( $result ) && is_array( $result ) && ! empty( $result['response'] ) && 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
 									update_post_meta( $session_productid, 'product_sync_square_id' . $session_productid, $mod[2] );
 								}
 							}
@@ -624,6 +706,7 @@ class WooToSquareSynchronizer {
 		} elseif ( strpos( $product_id, '_modifier' ) ) {
 
 				global $wpdb;
+				$data              = array();
 				$modifier_name     = ( explode( '_', $product_id ) );
 				$get_row           = 'get_row';
 				$modifier_checker  = $wpdb->$get_row( ( 'SELECT * FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_id = '$modifier_name[2]'" ) );
@@ -645,24 +728,34 @@ class WooToSquareSynchronizer {
 
 				$square = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), $woo_square_location_id, WOOSQU_PLUS_APPID );
 
-				if ( get_option( '_transient_timeout_' . $woo_square_location_id . 'modifier_transient_' . __FUNCTION__ ) > time() ) {
+				$modifier_object = array();
+				$response        = false;
+				$use_cached      = get_option( '_transient_timeout_' . $woo_square_location_id . 'modifier_transient_' . __FUNCTION__ ) > time();
 
-					$response        = get_transient( $woo_square_location_id . 'modifier_transient_' . __FUNCTION__ );
-					$modifier_object = json_decode( $response['body'], true );
-
-				} else {
-
-					$response        = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
-					$modifier_object = json_decode( $response['body'], true );
-					if ( ! empty( $modifier_object ) ) {
-						if ( count( $modifier_object ) > 999 ) {
-								$interval = 300;
-						} else {
-							$interval = 0;
-						}
+				if ( $use_cached ) {
+					$response = get_transient( $woo_square_location_id . 'modifier_transient_' . __FUNCTION__ );
+					if ( is_array( $response ) && ! empty( $response['body'] ) ) {
+						$modifier_object = json_decode( $response['body'], true );
 					}
-					set_transient( $woo_square_location_id . 'modifier_transient_' . __FUNCTION__, $response, $interval );
+				}
 
+				if ( empty( $modifier_object ) || ! is_array( $modifier_object ) ) {
+					$response = array();
+					$response = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
+					if ( is_array( $response ) && ! empty( $response['body'] ) ) {
+						$modifier_object = json_decode( $response['body'], true );
+					}
+					$interval = 0;
+					if ( ! empty( $modifier_object ) && is_array( $modifier_object ) && count( $modifier_object ) > 999 ) {
+						$interval = 300;
+					}
+					if ( is_array( $response ) ) {
+						set_transient( $woo_square_location_id . 'modifier_transient_' . __FUNCTION__, $response, $interval );
+					}
+				}
+
+				if ( ! is_array( $modifier_object ) ) {
+					$modifier_object = array();
 				}
 
 				foreach ( $modifier_object as $mod_object ) {
@@ -693,7 +786,12 @@ class WooToSquareSynchronizer {
 
 									$version = get_term_meta( $object->term_id, 'term_meta_version', true );
 
-									foreach ( $mod_object['modifier_list_data']['modifiers'] as $term_obj ) {
+									$modifier_items = array();
+									if ( ! empty( $mod_object['modifier_list_data']['modifiers'] ) && is_array( $mod_object['modifier_list_data']['modifiers'] ) ) {
+										$modifier_items = $mod_object['modifier_list_data']['modifiers'];
+									}
+
+									foreach ( $modifier_items as $term_obj ) {
 
 										if ( $term_obj['id'] === $object->description ) {
 
@@ -767,131 +865,133 @@ class WooToSquareSynchronizer {
 					}
 				}
 
-				$data_json = wp_json_encode( $data );
-				$url       = $this->square->get_square_v2_url() . 'catalog/object';
-				$result    = wp_remote_post(
-					$url,
-					array(
-						'method'      => 'POST',
-						'headers'     => array(
-							'Authorization'  => 'Bearer ' . $this->square->get_access_token(),
-							'Content-Type'   => 'application/json',
-							'Content-Length' => strlen( $data_json ),
-						),
-						'httpversion' => '1.0',
-						'sslverify'   => true,
-						'body'        => $data_json,
-					)
-				);
+				if ( ! empty( $data ) ) {
+					$data_json = wp_json_encode( $data );
+					$url       = $this->square->get_square_v2_url() . 'catalog/object';
+					$result    = wp_remote_post(
+						$url,
+						array(
+							'method'      => 'POST',
+							'headers'     => array(
+								'Authorization'  => 'Bearer ' . $this->square->get_access_token(),
+								'Content-Type'   => 'application/json',
+								'Content-Length' => strlen( $data_json ),
+							),
+							'httpversion' => '1.0',
+							'sslverify'   => true,
+							'body'        => $data_json,
+						)
+					);
 
-			if ( 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
+					if ( ! is_wp_error( $result ) && is_array( $result ) && ! empty( $result['response'] ) && 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
 
-				$result = json_decode( $result['body'], true );
+						$result = json_decode( $result['body'], true );
 
-				if ( 'MODIFIER_LIST' === $result['catalog_object']['type'] ) {
+						if ( 'MODIFIER_LIST' === $result['catalog_object']['type'] ) {
 
-					foreach ( $result['catalog_object']['modifier_list_data'] as $modifier ) {
+							foreach ( $result['catalog_object']['modifier_list_data'] as $modifier ) {
 
-						$modifier_name = $result['catalog_object']['modifier_list_data']['name'];
-						$mod_id        = $result['catalog_object']['id'];
-						global $wpdb;
-						$get_row     = 'get_row';
-						$modifier_id = $wpdb->$get_row( 'SELECT * FROM ' . $wpdb->prefix . "woosquare_modifier WHERE  modifier_set_unique_id = '$mod_id'" );
+								$modifier_name = $result['catalog_object']['modifier_list_data']['name'];
+								$mod_id        = $result['catalog_object']['id'];
+								global $wpdb;
+								$get_row     = 'get_row';
+								$modifier_id = $wpdb->$get_row( 'SELECT * FROM ' . $wpdb->prefix . "woosquare_modifier WHERE  modifier_set_unique_id = '$mod_id'" );
 
-						if ( ! empty( $modifier_id->modifier_id ) && ! empty( $modifier_id->modifier_set_name ) && ! empty( $modifier_id->modifier_set_unique_id ) && ! empty( $modifier_id->modifier_version ) ) {
+								if ( ! empty( $modifier_id->modifier_id ) && ! empty( $modifier_id->modifier_set_name ) && ! empty( $modifier_id->modifier_set_unique_id ) && ! empty( $modifier_id->modifier_version ) ) {
 
-							$mod_version = $result['catalog_object']['version'];
-							$wpdb->query( // phpcs:ignore
-								$wpdb->prepare(
+									$mod_version = $result['catalog_object']['version'];
+									$wpdb->query( // phpcs:ignore.
+										$wpdb->prepare(
 									"UPDATE {$wpdb->prefix}woosquare_modifier SET modifier_version = %s WHERE modifier_id = %d",
 									$mod_version,
 									$modifier_id->modifier_id
-								)
-							);
-							session_start();
-							$_SESSION['modifier_id']   = $modifier_id->modifier_id;
-							$_SESSION['modifier_slug'] = $modifier_id->modifier_slug;
+										)
+									);
+									session_start();
+									$_SESSION['modifier_id']   = $modifier_id->modifier_id;
+									$_SESSION['modifier_slug'] = $modifier_id->modifier_slug;
 
-						}
+								}
 
-						foreach ( $modifier as $mod ) {
+								foreach ( $modifier as $mod ) {
 
-							global $wpdb;
-							if ( ! empty( $_SESSION['modifier_slug'] ) && ! empty( $_SESSION['modifier_id'] ) ) {
-								$session_modifier_slug = sanitize_text_field( wp_unslash( $_SESSION['modifier_slug'] ) );
-								$session_modifier_id   = sanitize_text_field( wp_unslash( $_SESSION['modifier_id'] ) );
-								$texonomy              = 'pm_' . strtolower( str_replace( ' ', '-', $session_modifier_slug ) ) . '_' . ( $session_modifier_id );
-								$get_results           = 'get_results';
-								$term_query            = $wpdb->$get_results( ( 'SELECT * FROM ' . $wpdb->prefix . "term_taxonomy WHERE taxonomy = '$texonomy'" ) );
-								foreach ( $term_query as $kgs => $term ) {
-									if ( empty( $term->description ) ) {
-										$midd = $result['catalog_object']['modifier_list_data']['modifiers'][ $kgs ]['id'];
-										$wpdb->query( // phpcs:ignore
-											$wpdb->prepare(
+									global $wpdb;
+									if ( ! empty( $_SESSION['modifier_slug'] ) && ! empty( $_SESSION['modifier_id'] ) ) {
+										$session_modifier_slug = sanitize_text_field( wp_unslash( $_SESSION['modifier_slug'] ) );
+										$session_modifier_id   = sanitize_text_field( wp_unslash( $_SESSION['modifier_id'] ) );
+										$texonomy              = 'pm_' . strtolower( str_replace( ' ', '-', $session_modifier_slug ) ) . '_' . ( $session_modifier_id );
+										$get_results           = 'get_results';
+										$term_query            = $wpdb->$get_results( ( 'SELECT * FROM ' . $wpdb->prefix . "term_taxonomy WHERE taxonomy = '$texonomy'" ) );
+										foreach ( $term_query as $kgs => $term ) {
+											if ( empty( $term->description ) ) {
+												$midd = $result['catalog_object']['modifier_list_data']['modifiers'][ $kgs ]['id'];
+												$wpdb->query( // phpcs:ignore.
+													$wpdb->prepare(
 												"UPDATE {$wpdb->prefix}term_taxonomy SET description = %s WHERE term_id = %d",
 												$midd,
 												$term->term_id
-											)
-										);
-									}
-									update_term_meta( $term->term_id, 'term_meta_version', sanitize_text_field( $mod['version'] ) );
+													)
+												);
+											}
+											update_term_meta( $term->term_id, 'term_meta_version', sanitize_text_field( $mod['version'] ) );
 
+										}
+									}
 								}
 							}
 						}
 					}
-				}
 
-				if ( ! empty( $_SESSION['productid'] ) ) {
+					if ( ! empty( $_SESSION['productid'] ) ) {
 
-					$session_productid = sanitize_text_field( wp_unslash( $_SESSION['productid'] ) );
-					$square_id         = get_post_meta( $session_productid, 'square_id', true );
+						$session_productid = sanitize_text_field( wp_unslash( $_SESSION['productid'] ) );
+						$square_id         = get_post_meta( $session_productid, 'square_id', true );
 
-					$modifier_value = get_post_meta( $session_productid, 'product_modifier_group_name', true );
-					if ( ! empty( $modifier_value ) ) {
-						$kkey      = 0;
-						$kkey_plus = 0;
-						$mod_array = array();
-						foreach ( $modifier_value as $mod ) {
+						$modifier_value = get_post_meta( $session_productid, 'product_modifier_group_name', true );
+						if ( ! empty( $modifier_value ) ) {
+							$kkey      = 0;
+							$kkey_plus = 0;
+							$mod_array = array();
+							foreach ( $modifier_value as $mod ) {
 
-							$mod = ( explode( '_', $mod ) );
+								$mod = ( explode( '_', $mod ) );
 
-							if ( ! empty( $mod ) ) {
-								global $wpdb;
-								$get_var        = 'get_var';
-								$rcount         = $wpdb->$get_var( 'SELECT modifier_set_unique_id FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_id = '$mod[2]' " );
-								$url            = $this->square->get_square_v2_url() . 'catalog/object/' . $rcount . '?include_related_objects=true';
-								$headers        = array(
+								if ( ! empty( $mod ) ) {
+									global $wpdb;
+									$get_var        = 'get_var';
+									$rcount         = $wpdb->$get_var( 'SELECT modifier_set_unique_id FROM ' . $wpdb->prefix . "woosquare_modifier WHERE modifier_id = '$mod[2]' " );
+									$url            = $this->square->get_square_v2_url() . 'catalog/object/' . $rcount . '?include_related_objects=true';
+									$headers        = array(
 									'Authorization' => 'Bearer ' . $this->square->get_access_token(),
 									'Content-Type'  => 'application/json',
-								);
-								$method         = 'GET';
-								$response       = array();
-								$args           = array( '' );
-								$response_check = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
-								$response_check = json_decode( $response_check['body'], false );
+									);
+									$method         = 'GET';
+									$response       = array();
+									$args           = array( '' );
+									$response_check = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
+									$response_check = json_decode( $response_check['body'], false );
 
-								if ( 'MODIFIER_LIST' === $response_check->object->type ) {
+									if ( 'MODIFIER_LIST' === $response_check->object->type ) {
 
-									$mod_array[ $kkey_plus ] = $rcount;
-									++$kkey_plus;
-									delete_option( $mod[2] . '_' . $rcount );
-								} else {
-									update_option( $mod[2] . '_' . $rcount, 'This Modifier is not exist/deleted in square kindly delete it manually.' );
+										$mod_array[ $kkey_plus ] = $rcount;
+										++$kkey_plus;
+										delete_option( $mod[2] . '_' . $rcount );
+									} else {
+										update_option( $mod[2] . '_' . $rcount, 'This Modifier is not exist/deleted in square kindly delete it manually.' );
+									}
 								}
 							}
-						}
 
-						$data = array(
+							$data = array(
 							'item_ids'                 => array(
 								$square_id,
 							),
 							'modifier_lists_to_enable' => $mod_array,
-						);
+							);
 
-						$data_json = wp_json_encode( $data );
-						$url       = $this->square->get_square_v2_url() . 'catalog/update-item-modifier-lists';
-						$result    = wp_remote_post(
+							$data_json = wp_json_encode( $data );
+							$url       = $this->square->get_square_v2_url() . 'catalog/update-item-modifier-lists';
+							$result    = wp_remote_post(
 							$url,
 							array(
 								'method'      => 'POST',
@@ -904,14 +1004,14 @@ class WooToSquareSynchronizer {
 								'sslverify'   => true,
 								'body'        => $data_json,
 							)
-						);
+							);
 
-						if ( 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
-							update_post_meta( $session_productid, 'product_sync_square_id' . $session_productid, $mod[2] );
+							if ( 200 === $result['response']['code'] && 'OK' === $result['response']['message'] ) {
+								update_post_meta( $session_productid, 'product_sync_square_id' . $session_productid, $mod[2] );
+							}
 						}
 					}
 				}
-			}
 		}
 	}
 
@@ -941,11 +1041,13 @@ class WooToSquareSynchronizer {
 		$response = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
 
 		$custom_attr_list = json_decode( $response['body'], true );
-		foreach ( $custom_attr_list as $key => $custom_attr ) {
-			if ( isset( $custom_attr['custom_attribute_definition_data']['key'] ) && 'custom_sale_price' === $custom_attr['custom_attribute_definition_data']['key'] ) {
-				$cust_attr = $custom_attr['custom_attribute_definition_data']['key'];
-				update_option( 'woosquare_sale_price_custom_attr', $cust_attr );
-				return $cust_attr;
+		if ( is_array( $custom_attr_list ) ) {
+			foreach ( $custom_attr_list as $key => $custom_attr ) {
+				if ( isset( $custom_attr['custom_attribute_definition_data']['key'] ) && 'custom_sale_price' === $custom_attr['custom_attribute_definition_data']['key'] ) {
+					$cust_attr = $custom_attr['custom_attribute_definition_data']['key'];
+					update_option( 'woosquare_sale_price_custom_attr', $cust_attr );
+					return $cust_attr;
+				}
 			}
 		}
 		if ( empty( $cust_attr ) ) {
@@ -1271,7 +1373,7 @@ class WooToSquareSynchronizer {
 
 		$object_edit_category = json_decode( $response['body'], true );
 
-		$resultobj = $object_edit_category['catalog_object'];
+		$resultobj = isset( $object_edit_category['catalog_object'] ) ? $object_edit_category['catalog_object'] : array();
 
 		if ( ! empty( $resultobj['id'] ) ) {
 			update_option( 'category_square_id_' . $category->term_id, $resultobj['id'] );
@@ -1344,14 +1446,29 @@ class WooToSquareSynchronizer {
 		$data                   = array();
 		$token                  = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
 		$woo_square_location_id = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
-		$categories             = get_the_terms( $product, 'product_cat' );
+
+		try {
+			$categories = get_the_terms( $product, 'product_cat' );
+			if ( is_wp_error( $categories ) ) {
+				$categories = array();
+			}
+		} catch ( Exception $e ) {
+			$categories = array();
+		}
+		
 		if ( ! $categories ) {
 			$categories = array();
 		}
-		$category_square_id         = null;
-		$square                     = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), $woo_square_location_id, WOOSQU_PLUS_APPID );
-		$square_to_woo_synchronizer = new SquareToWooSynchronizer( $square );
-		$square_categories          = $square_to_woo_synchronizer->get_square_categories();
+
+		$category_square_id = null;
+
+		try {
+			$square                     = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), $woo_square_location_id, WOOSQU_PLUS_APPID );
+			$square_to_woo_synchronizer = new SquareToWooSynchronizer( $square );
+			$square_categories          = $square_to_woo_synchronizer->get_square_categories();
+		} catch ( Exception $e ) {
+			throw $e;
+		}
 
 		$is_enable_square_option_format = $square_to_woo_synchronizer->is_enable_square_option_format( $product_square_id );
 		// need to take version.
@@ -1400,14 +1517,17 @@ class WooToSquareSynchronizer {
 		$_product = wc_get_product( $product->ID );
 
 		$custom_sale_attr = $this->get_woosquare_custom_sale_attr();
+		// Initialize custom_variation_attributes for all product types.
+		$custom_variation_attributes = array();
 		if ( $_product->is_type( 'variable' ) || $_product->is_type( 'booking' ) ) {   // Variable Product.
-			$unserialize                 = 'unserialize';
-			$product_variations          = $unserialize( $product_details['_product_attributes'][0] );
-			$custom_variation_attributes = array();
+			$unserialize        = 'unserialize';
+			$product_variations = $unserialize( $product_details['_product_attributes'][0] );
 			foreach ( $product_variations as $product_variation ) {
 				// check if there are variations with fees.
-				$square_options_values = array();
-				$square_options_values[ 'attribute_' . strtolower( $product_variation['name'] ) ] = array();
+				$attr_name                               = sanitize_title( $product_variation['name'] );
+				$attr_meta_key                           = 'attribute_' . $attr_name;
+				$square_options_values                   = array();
+				$square_options_values[ $attr_meta_key ] = array();
 				if ( $product_variation['is_variation'] ) {
 
 					$args           = array(
@@ -1420,13 +1540,13 @@ class WooToSquareSynchronizer {
 					foreach ( $child_products as $child_product ) {
 						$child_product_meta = get_post_meta( $child_product->ID );
 
-						$attr_name = strtolower( $product_variation['name'] );
 						if ( $is_enable_square_option_format ) {
-							if ( ! in_array( $child_product_meta[ 'attribute_' . $attr_name ][0], $square_options_values[ 'attribute_' . strtolower( $product_variation['name'] ) ], true ) ) {
-								$square_options_values[ 'attribute_' . $attr_name ][] = $child_product_meta[ 'attribute_' . strtolower( $product_variation['name'] ) ][0];
+							$attr_value = isset( $child_product_meta[ $attr_meta_key ][0] ) ? $child_product_meta[ $attr_meta_key ][0] : '';
+							if ( $attr_value && ! in_array( $attr_value, $square_options_values[ $attr_meta_key ], true ) ) {
+								$square_options_values[ $attr_meta_key ][] = $attr_value;
 							}
 						}
-						$variation_name = $child_product_meta[ 'attribute_' . $attr_name ][0];
+						$variation_name = isset( $child_product_meta[ $attr_meta_key ][0] ) ? $child_product_meta[ $attr_meta_key ][0] : '';
 						if ( empty( $child_product_meta['_sku'][0] ) ) {
 							// admin msg that variation sku empty not sync in sqaure.
 							$admin_msg = true;
@@ -1445,7 +1565,7 @@ class WooToSquareSynchronizer {
 								'currency_code' => get_option( 'woocommerce_currency' ),
 								'amount'        => $square->format_amount( ! empty( $child_product_meta['_price'][0] ) && 0 !== $child_product_meta['_price'][0] ? $child_product_meta['_price'][0] : ( $child_product_meta['_regular_price'][0] ?? 0 ), 'wotosq', get_option( 'woocommerce_currency' ) ),
 							),
-							'sale_price'      => $child_product_meta['_sale_price'][0],
+							'sale_price'      => isset( $child_product_meta['_sale_price'][0] ) ? $child_product_meta['_sale_price'][0] : null,
 							$attr_name        => $is_enable_square_option_format ? $variation_name : '',
 						);
 					}
@@ -1468,13 +1588,13 @@ class WooToSquareSynchronizer {
 							'currency_code' => get_option( 'woocommerce_currency' ),
 							'amount'        => $square->format_amount( $product_details['_price'][0], 'wotosq', get_option( 'woocommerce_currency' ) ),
 						),
-						'sale_price'      => $child_product_meta['_sale_price'][0],
+						'sale_price'      => isset( $product_details['_sale_price'][0] ) ? $product_details['_sale_price'][0] : null,
 					);
 				}
 			}
 
-			// [color:red,size:smal] sample than below for multiple attributes and variations
-			// color[black],size[smal] sample
+			// [color:red,size:smal] sample than below for multiple attributes and variations.
+			// color[black],size[smal] sample.
 			$setvariationformultupleattr = $data['variations'];
 			foreach ( $setvariationformultupleattr as $mult_attr ) {
 
@@ -1482,8 +1602,14 @@ class WooToSquareSynchronizer {
 					$merged_attr    = array();
 					$getingattrname = '';
 					foreach ( $mult_attr as $attr ) {
-						$merged_attr     = array_replace_recursive( $merged_attr, $attr );
-						$getingattrname .= $attr['name'] . ', ';
+						// Only merge if $attr is an array, otherwise skip or handle as string.
+						if ( is_array( $attr ) ) {
+							$merged_attr     = array_replace_recursive( $merged_attr, $attr );
+							$getingattrname .= ( isset( $attr['name'] ) ? $attr['name'] : '' ) . ', ';
+						} else {
+							// If $attr is a string, just append it.
+							$getingattrname .= $attr . ', ';
+						}
 					}
 					if ( substr( $getingattrname, -2 ) === ', ' ) {
 						$getingattrname = substr( $getingattrname, 0, -2 );
@@ -1492,23 +1618,43 @@ class WooToSquareSynchronizer {
 					$datavariations[]    = $merged_attr;
 				} else {
 					$getingattrname = '';
-					foreach ( $mult_attr as $attr ) {
-						$getingattrnamedata = explode( '[', $attr['name'] );
-						$getingattrval      = explode( ']', $getingattrnamedata[1] );
-						$getingattrname    .= str_replace( 'pa_', '', $getingattrnamedata[0] ) . '[' . $getingattrval[0] . '],';
+					
+					// Check if $mult_attr is an array of arrays (variable product) or a single array (simple product).
+					$attrs_to_process = array();
+					if ( is_array( $mult_attr ) && ! empty( $mult_attr ) ) {
+						// Check if this looks like a variation array (has 'name', 'sku' keys) or an array of variation arrays.
+						$is_variation_array = isset( $mult_attr['name'] ) || isset( $mult_attr['sku'] );
+						if ( $is_variation_array ) {
+							// Simple product: $mult_attr is already a single variation array.
+							$attrs_to_process = array( $mult_attr );
+						} else {
+							// Variable product: $mult_attr is array of variation arrays.
+							$attrs_to_process = $mult_attr;
+						}
+					}
+					
+					foreach ( $attrs_to_process as $attr ) {
+						if ( is_array( $attr ) && isset( $attr['name'] ) ) {
+							$getingattrnamedata = explode( '[', $attr['name'] );
+							if ( isset( $getingattrnamedata[1] ) ) {
+								$getingattrval   = explode( ']', $getingattrnamedata[1] );
+								$getingattrname .= str_replace( 'pa_', '', $getingattrnamedata[0] ) . '[' . ( isset( $getingattrval[0] ) ? $getingattrval[0] : '' ) . '],';
+							}
+						}
 					}
 
 					$getingattrname   = rtrim( $getingattrname, ',' );
+					$last_attr        = ! empty( $attrs_to_process ) ? end( $attrs_to_process ) : array();
 					$datavariations[] = array(
 						'name'            => $getingattrname,
-						'sku'             => $attr['sku'],
-						'upc'             => $attr['upc'],
-						'track_inventory' => $attr['track_inventory'],
+						'sku'             => isset( $last_attr['sku'] ) ? $last_attr['sku'] : '',
+						'upc'             => isset( $last_attr['upc'] ) ? $last_attr['upc'] : null,
+						'track_inventory' => isset( $last_attr['track_inventory'] ) ? $last_attr['track_inventory'] : false,
 						'price_money'     => array(
 							'currency_code' => get_option( 'woocommerce_currency' ),
-							'amount'        => $attr['price_money']['amount'],
+							'amount'        => isset( $last_attr['price_money']['amount'] ) ? $last_attr['price_money']['amount'] : 0,
 						),
-						'sale_price'      => $attr['sale_price'],
+						'sale_price'      => isset( $last_attr['sale_price'] ) ? $last_attr['sale_price'] : null,
 					);
 				}
 			}
@@ -1536,17 +1682,25 @@ class WooToSquareSynchronizer {
 				$product_variations = $unserialize( $product_details['_product_attributes'][0] );
 
 				if ( ! empty( $product_variations ) ) {
+					$pa = ''; // Initialize $pa variable
 					foreach ( $product_variations as $variations ) {
 						$variat = explode( '_', $variations['name'] );
 						if ( 'pa' === $variat[0] ) {
 							$variatio = ( wc_get_product_terms( $product->ID, $variations['name'], array( 'fields' => 'names' ) ) );
-							$pa      .= isset( $variat[1], $variatio ) ? $variat[1] . '[' . implode( '|', $variatio ) . '],' : '';
-						} else {
-							$pa .= ( isset( $variations['name'], $variations['value'] ) ) ? $variations['name'] . '[' . $variations['value'] . '],' : '';
-
+							// Check if $variatio is not empty before adding
+							if ( isset( $variat[1] ) && ! empty( $variatio ) && is_array( $variatio ) ) {
+								$pa .= $variat[1] . '[' . implode( '|', $variatio ) . '],';
+							}
+						} elseif ( isset( $variations['name'], $variations['value'] ) && ! empty( trim( $variations['value'] ) ) ) {
+							// Check if both name and value exist AND value is not empty
+							$pa .= $variations['name'] . '[' . $variations['value'] . '],';
 						}
 					}
 					$pa = rtrim( $pa, ',' );
+					// If $pa is empty after processing, set it to 'Regular'
+					if ( empty( $pa ) ) {
+						$pa = 'Regular';
+					}
 				} else {
 					$pa = 'Regular';
 				}
@@ -1560,7 +1714,7 @@ class WooToSquareSynchronizer {
 						'currency_code' => get_option( 'woocommerce_currency' ),
 						'amount'        => $square->format_amount( $product_details['_price'][0], 'wotosq', get_option( 'woocommerce_currency' ) ),
 					),
-					'sale_price'      => $product_details['_sale_price'][0],
+					'sale_price'      => isset( $product_details['_sale_price'][0] ) ? $product_details['_sale_price'][0] : null,
 				);
 			} else {
 				$pa                   = 'Regular';
@@ -1600,12 +1754,62 @@ class WooToSquareSynchronizer {
 		}
 
 		if ( ( $_product->is_type( 'variable' ) ) || ( $_product->is_type( 'simple' ) ) || ( $_product->is_type( 'booking' ) ) ) {
-			$sync_on_add_edit                    = get_option( 'sync_on_add_edit' );
-			$woosquare_pro_edit_fields           = get_option( 'woosquare_pro_edit_fields' );
-			$woo_square_sync_preference          = get_option( 'woo_square_sync_preference' );
-			$woo_square_listsaved_products_wooco = get_option( 'woo_square_listsaved_products_wooco' );
-			$update_inventory                    = true;
-			$upload_image                        = true;
+			// If this is a manual sync (via AJAX), disable sync_on_add_edit to allow full sync.
+			// Check for manual sync flag or specific AJAX action with id parameter.
+			$is_manual_sync = false;
+
+			// Check if manual sync is running.
+			if ( get_option( 'woo_square_running_sync' ) === 'manual' ) {
+				// Verify nonce if this is an AJAX request.
+				if ( wp_doing_ajax() && isset( $_POST['ajaxnonce'] ) ) {
+					if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
+						return; // Nonce verification failed, exit early.
+					}
+				} elseif ( ! wp_doing_ajax() && isset( $_POST['_wpnonce'] ) ) {
+					// Verify WordPress post edit nonce for admin edit page.
+					// WordPress already verifies this before calling save_post hook, but we verify again for PHPCS compliance.
+					$post_id = isset( $_POST['post_ID'] ) ? intval( $_POST['post_ID'] ) : ( isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0 );
+					if ( $post_id > 0 ) {
+						$nonce_action = 'update-post_' . $post_id;
+						if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
+							return; // Nonce verification failed, exit early.
+						}
+					}
+				}
+				$is_manual_sync = true;
+			} elseif ( wp_doing_ajax() && isset( $_POST['action'] ) && 'sync_woo_product_to_square' === sanitize_text_field( wp_unslash( $_POST['action'] ) ) && isset( $_POST['id'] ) ) {
+				// Check for specific manual sync AJAX action with id parameter.
+				// Verify nonce before processing POST data.
+				if ( ! isset( $_POST['ajaxnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['ajaxnonce'] ) ), 'my_woosquare_ajax_nonce' ) ) {
+					return; // Nonce verification failed, exit early.
+				}
+				$is_manual_sync = true;
+			} elseif ( ! wp_doing_ajax() && isset( $_POST['_wpnonce'] ) ) {
+				// Normal admin edit from wp-admin: verify WordPress post edit nonce.
+				// WordPress already verifies this before calling save_post hook, but we verify again for PHPCS compliance.
+				$post_id = isset( $_POST['post_ID'] ) ? intval( $_POST['post_ID'] ) : ( isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0 );
+				if ( $post_id > 0 ) {
+					$nonce_action = 'update-post_' . $post_id;
+					if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
+						return; // Nonce verification failed, exit early.
+					}
+				}
+			}
+
+			if ( $is_manual_sync ) {
+				// Manual sync: disable sync_on_add_edit to allow full sync.
+				$sync_on_add_edit = false;
+			} else {
+				// Normal edit: apply sync_on_add_edit settings.
+				$sync_on_add_edit = get_option( 'sync_on_add_edit' );
+			}
+
+				$woosquare_pro_edit_fields           = get_option( 'woosquare_pro_edit_fields' );
+				$woo_square_sync_preference          = (int) get_option( 'woo_square_sync_preference' );
+				$woo_square_auto_sync                = (int) get_option( 'woo_square_auto_sync' );
+				$woo_square_listsaved_products_wooco = get_option( 'woo_square_listsaved_products_wooco' );
+				$update_inventory                    = true;
+				$upload_image                        = true;
 
 			if ( 0 === $woo_square_sync_preference && 1 === $woo_square_auto_sync ) {
 				if ( is_array( $woo_square_listsaved_products_wooco ) && ! in_array( $product->ID, $woo_square_listsaved_products_wooco, true ) ) {
@@ -1626,7 +1830,7 @@ class WooToSquareSynchronizer {
 						}
 					}
 					if ( ! in_array( 'description', $woosquare_pro_edit_fields, true ) ) {
-						unset( $data['description'] );
+						$data['description'] = $product_square_id->description;
 					}
 					if ( ! in_array( 'price', $woosquare_pro_edit_fields, true ) ) {
 
@@ -1642,10 +1846,29 @@ class WooToSquareSynchronizer {
 						$update_inventory = false;
 					}
 					if ( ! in_array( 'category', $woosquare_pro_edit_fields, true ) ) {
-						unset( $data['category_id'] );
+						if ( ! empty( $product_square_id->category_id ) ) {
+							$data['category_id'] = $product_square_id->category_id;
+						}
 					}
+
 					if ( ! in_array( 'pro_image', $woosquare_pro_edit_fields, true ) ) {
 						$upload_image = false;
+						// Preserve existing image_ids from Square when image sync is disabled.
+						$existing_image_ids = array();
+
+						// Check item_data->image_ids first (v2 API structure).
+						if ( ! empty( $product_square_id->item_data->image_ids ) && is_array( $product_square_id->item_data->image_ids ) ) {
+							$existing_image_ids = $product_square_id->item_data->image_ids;
+						} elseif ( ! empty( $product_square_id->image_ids ) && is_array( $product_square_id->image_ids ) ) {
+							$existing_image_ids = $product_square_id->image_ids;
+						} elseif ( ! empty( $product_square_id->master_image->id ) ) {
+							// Fallback to master_image->id if image_ids array not available.
+							$existing_image_ids = array( $product_square_id->master_image->id );
+						}
+
+						if ( ! empty( $existing_image_ids ) ) {
+							$data['preserve_image_ids'] = $existing_image_ids;
+						}
 					}
 				}
 			}
@@ -1655,8 +1878,8 @@ class WooToSquareSynchronizer {
 
 				if ( ! empty( $exist_in_square->id ) ) {
 					if ( ( ! empty( $exist_in_square->item_data->variations )
-						|| ! empty( $exist_in_square->variations ) )
-						&& ! empty( $data['variations'] )
+					|| ! empty( $exist_in_square->variations ) )
+					&& ! empty( $data['variations'] )
 					) {
 
 						if ( ! empty( $exist_in_square->item_data->variations ) ) {
@@ -1699,50 +1922,60 @@ class WooToSquareSynchronizer {
 				$prod_cri = 'add';
 			}
 
-			$data_json = array();
+				$data_json = array();
 
-			$forversion = get_post_meta( $product->ID, 'log_woosquare_update_items_response', true );
+				$forversion = get_post_meta( $product->ID, 'log_woosquare_update_items_response', true );
 
-			$data_json['idempotency_key'] = uniqid();
-			$data_json['object']['type']  = 'ITEM';
+				$data_json['idempotency_key'] = uniqid();
+				$data_json['object']['type']  = 'ITEM';
 
-			$data_json['object']['id'] = $item_id;
+				$data_json['object']['id'] = $item_id;
 
 			if ( ! empty( $exist_in_square->version ) ) {
 				$data_json['object']['version'] = (int) $exist_in_square->version;
 			}
 
-			$data_json['object']['item_data']['name']         = $data['name'];
-			$data_json['object']['item_data']['product_type'] = 'REGULAR';
-			$data_json['object']['item_data']['description']  = $data['description'];
-			$data_json['object']['item_data']['visibility']   = $data['visibility'];
+				$data_json['object']['item_data']['name']         = $data['name'];
+				$data_json['object']['item_data']['product_type'] = 'REGULAR';
+				$data_json['object']['item_data']['description']  = $data['description'];
+				$data_json['object']['item_data']['visibility']   = $data['visibility'];
 
-			// Assuming $exist_in_square is the object you're working with.
-			$existing_location_ids = isset( $exist_in_square->present_at_location_ids ) ? $exist_in_square->present_at_location_ids : array();
+				// Assuming $exist_in_square is the object you're working with.
+				$existing_location_ids = isset( $exist_in_square->present_at_location_ids ) ? $exist_in_square->present_at_location_ids : array();
 
-			// Check if the new location ID is already present in the existing array.
+				// Check if the new location ID is already present in the existing array.
 			if ( ! in_array( $woo_square_location_id, $existing_location_ids, true ) ) {
 				// If the location is not in the existing array, add it.
 				$existing_location_ids[] = $woo_square_location_id;
 			}
 
-			$data_json['object']['present_at_location_ids'] = $existing_location_ids;
+				$data_json['object']['present_at_location_ids'] = $existing_location_ids;
 
-			// Set 'present_at_all_locations' to false.
-			$data_json['object']['present_at_all_locations'] = false;
-			if ( $is_enable_square_option_format ) {
+				// Set 'present_at_all_locations' to false.
+				$data_json['object']['present_at_all_locations'] = false;
+			if ( $is_enable_square_option_format && ! empty( $custom_variation_attributes ) && is_array( $custom_variation_attributes ) ) {
 				$item_option_ids = array();
 				foreach ( $custom_variation_attributes as $cus_var_attr ) {
 					if ( isset( $cus_var_attr ) ) {
-						if ( isset( $cus_var_attr['attr']['name'] ) ) {
+						$item_option_id = null;
+						if ( isset( $cus_var_attr['attr']['name'] ) && isset( $cus_var_attr['attr']['id'] ) ) {
 							$item_option_id = $cus_var_attr['attr']['id'];
 						}
-						$item_option_ids[] = array(
-							'item_option_id' => $item_option_id,
-						);
+						// Only add if item_option_id is not empty
+						if ( ! empty( $item_option_id ) ) {
+							$item_option_ids[] = array(
+								'item_option_id' => $item_option_id,
+							);
+						}
 					}
 				}
-				$data_json['object']['item_data']['item_options'] = $item_option_ids;
+				// Only set item_options if we have valid option IDs
+				if ( ! empty( $item_option_ids ) ) {
+					$data_json['object']['item_data']['item_options'] = $item_option_ids;
+				} elseif ( isset( $data_json['object']['item_data']['item_options'] ) ) {
+					// Remove item_options if it exists and is empty.
+					unset( $data_json['object']['item_data']['item_options'] );
+				}
 
 			}
 
@@ -1753,7 +1986,20 @@ class WooToSquareSynchronizer {
 			if ( ! empty( $product_square_id->tax_ids ) ) {
 				$data_json['object']['item_data']['tax_ids'] = $product_square_id->tax_ids;
 			}
+			// Preserve existing image_ids when image sync is disabled to prevent image removal.
+			if ( ! empty( $data['preserve_image_ids'] ) && is_array( $data['preserve_image_ids'] ) ) {
+				$data_json['object']['item_data']['image_ids'] = $data['preserve_image_ids'];
+			}
 			foreach ( $data['variations'] as $key => $variant ) {
+				// Skip variations with empty SKU (SKU is required)
+				if ( empty( $variant['sku'] ) ) {
+					continue; // Skip this variation
+				}
+				
+				// If name is empty, use SKU as name (Square requires a name for variations)
+				if ( empty( $variant['name'] ) ) {
+					$variant['name'] = $variant['sku'];
+				}
 
 				if ( isset( $variant['sale_price'] ) && ! empty( $variant['sale_price'] ) ) {
 					$sale_price[ $custom_sale_attr ] = array(
@@ -1769,12 +2015,25 @@ class WooToSquareSynchronizer {
 				if ( isset( $sale_price ) ) {
 					$data_json['object']['item_data']['variations'][ $key ]['custom_attribute_values'] = $sale_price;
 				}
+				
+				// Set variation ID - ensure it's not just '#' 
 				if ( $_product->is_type( 'booking' ) ) {
-					$data_json['object']['item_data']['variations'][ $key ]['id'] = '#' . $_product->get_sku();
+					$variation_sku = $_product->get_sku();
+					if ( ! empty( $variation_sku ) ) {
+						$data_json['object']['item_data']['variations'][ $key ]['id'] = '#' . $variation_sku;
+					} else {
+						// Use product ID if SKU is empty
+						$data_json['object']['item_data']['variations'][ $key ]['id'] = '#' . $product->ID . '-' . $key;
+					}
 				} elseif ( ! empty( $variation_ids[ $variant['sku'] ] ) ) {
-						$data_json['object']['item_data']['variations'][ $key ]['id'] = $variation_ids[ $variant['sku'] ];
-				} else {
+					$data_json['object']['item_data']['variations'][ $key ]['id'] = $variation_ids[ $variant['sku'] ];
+				} elseif ( ! empty( $variant['sku'] ) ) {
+					// Ensure SKU is not empty before creating ID.
 					$data_json['object']['item_data']['variations'][ $key ]['id'] = '#' . $variant['sku'];
+				} else {
+					// Use variation name or product ID + key as fallback.
+					$fallback_id = ! empty( $variant['name'] ) ? sanitize_title( $variant['name'] ) : ( $product->ID . '-' . $key );
+					$data_json['object']['item_data']['variations'][ $key ]['id'] = '#' . $fallback_id;
 				}
 
 				if ( ! empty( $exist_in_square->variations ) ) {
@@ -1791,25 +2050,110 @@ class WooToSquareSynchronizer {
 						}
 					}
 				}
-				if ( $is_enable_square_option_format ) {
+				if ( $is_enable_square_option_format && ! empty( $custom_variation_attributes ) && is_array( $custom_variation_attributes ) ) {
 					$item_option_values = array();
 					foreach ( $custom_variation_attributes as $cus_var_attr ) {
-						if ( isset( $cus_var_attr ) ) {
+						if ( isset( $cus_var_attr ) && isset( $cus_var_attr['attr'] ) && isset( $cus_var_attr['attr']['name'] ) ) {
+							$item_option_id       = null;
+							$item_option_value_id = null;
+							
+							// Check if variant has this attribute
 							if ( isset( $variant[ $cus_var_attr['attr']['name'] ] ) ) {
-								$item_option_id = $cus_var_attr['attr']['id'];
-								foreach ( $cus_var_attr['values'] as $attr_key => $vals ) {
-									if ( $variant[ $cus_var_attr['attr']['name'] ] === $attr_key ) {
-										$item_option_value_id = $vals['id'];
+								$item_option_id     = $cus_var_attr['attr']['id'];
+								$variant_attr_value = $variant[ $cus_var_attr['attr']['name'] ];
+								
+								// Find matching value in custom_variation_attributes
+								if ( isset( $cus_var_attr['values'] ) && is_array( $cus_var_attr['values'] ) ) {
+									foreach ( $cus_var_attr['values'] as $attr_key => $vals ) {
+										// Try multiple matching strategies
+										$match_found = false;
+										
+										// Strategy 1: Direct key match
+										if ( $variant_attr_value === $attr_key ) {
+											if ( isset( $vals['id'] ) ) {
+												$item_option_value_id = $vals['id'];
+												$match_found          = true;
+											}
+										}
+										
+										// Strategy 2: Match with name field if key doesn't match
+										if ( ! $match_found && isset( $vals['name'] ) && $variant_attr_value === $vals['name'] ) {
+											if ( isset( $vals['id'] ) ) {
+												$item_option_value_id = $vals['id'];
+												$match_found          = true;
+											}
+										}
+										
+										// Strategy 3: Type conversion match (string to string)
+										if ( ! $match_found && (string) $variant_attr_value === (string) $attr_key ) {
+											if ( isset( $vals['id'] ) ) {
+												$item_option_value_id = $vals['id'];
+												$match_found          = true;
+											}
+										}
+										
+										if ( $match_found ) {
+											break; // Found match, exit loop
+										}
 									}
 								}
+								
+								// If option value not found, create it in Square
+								if ( ! empty( $item_option_id ) && empty( $item_option_value_id ) ) {
+									// Create missing option value in Square
+									$base_url = $square->get_square_v2_url() . 'catalog/object';
+									$headers  = array(
+										'Authorization'  => 'Bearer ' . $square->get_access_token(),
+										'Content-Type'   => 'application/json',
+										'Square-Version' => '2024-03-20',
+									);
+									
+									$create_value_data = array(
+										'idempotency_key' => uniqid(),
+										'object'          => array(
+											'id'                     => '#square_option_value_' . $variant_attr_value,
+											'type'                   => 'ITEM_OPTION_VAL',
+											'item_option_value_data' => array(
+												'item_option_id' => $item_option_id,
+												'name'           => $variant_attr_value,
+											),
+										),
+									);
+									
+									$create_response = array();
+									$create_response = $square->wp_remote_woosquare( $base_url, $create_value_data, 'POST', $headers, $create_response );
+									
+									if ( isset( $create_response['response']['code'] ) && 200 === $create_response['response']['code'] ) {
+										$created_value = json_decode( $create_response['body'], true );
+										if ( ! empty( $created_value['catalog_object'] ) && isset( $created_value['catalog_object']['id'] ) ) {
+											$item_option_value_id = $created_value['catalog_object']['id'];
+											// Add to custom_variation_attributes for future use
+											$cus_var_attr['values'][ $variant_attr_value ] = array(
+												'name' => $variant_attr_value,
+												'id'   => $item_option_value_id,
+											);
+										}
+									}
+								}
+								
+								// Only add if both IDs are set
+								if ( ! empty( $item_option_id ) && ! empty( $item_option_value_id ) ) {
+									$item_option_values[] = array(
+										'item_option_id'       => $item_option_id,
+										'item_option_value_id' => $item_option_value_id,
+									);
+								}
 							}
-							$item_option_values[] = array(
-								'item_option_id'       => $item_option_id,
-								'item_option_value_id' => $item_option_value_id,
-							);
 						}
 					}
-					$data_json['object']['item_data']['variations'][ $key ]['item_variation_data']['item_option_values'] = $item_option_values;
+					
+					// Only set item_option_values if we have valid values
+					if ( ! empty( $item_option_values ) ) {
+						$data_json['object']['item_data']['variations'][ $key ]['item_variation_data']['item_option_values'] = $item_option_values;
+					} else {
+						// If no valid option values, remove item_option_values to avoid error
+						unset( $data_json['object']['item_data']['variations'][ $key ]['item_variation_data']['item_option_values'] );
+					}
 
 				}
 				if ( ! empty( $variant['upc'] ) && '1' === get_option( 'enable_woosquare_gtin_field' ) ) {
@@ -1836,239 +2180,257 @@ class WooToSquareSynchronizer {
 					$data_json['object']['item_data']['variations'][ $key ]['item_variation_data']['price_money']['currency'] = $variant['price_money']['currency_code'];
 				}
 			}
+			
+			// Re-index variations array to ensure sequential keys (Square API requires indexed array, not associative)
+			if ( isset( $data_json['object']['item_data']['variations'] ) && is_array( $data_json['object']['item_data']['variations'] ) ) {
+				$data_json['object']['item_data']['variations'] = array_values( $data_json['object']['item_data']['variations'] );
+			}
 
-			$data_json = ( $data_json );
+				$data_json = ( $data_json );
 
-			$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/object';
+				$url = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/object';
 
-			$headers  = array(
-				'Authorization'  => 'Bearer ' . $this->square->get_access_token(),
-				'Content-Type'   => 'application/json',
-				'Square-Version' => '2024-03-20',
-			);
-			$method   = 'POST';
-			$response = array();
-
-			$response     = $square->wp_remote_woosquare( $url, $data_json, $method, $headers, $response );
-			$responsesync = $response;
-
-			update_post_meta( $product->ID, 'log_woosquare_update_items_request', $data_json );
-
-			$object_response = json_decode( $response['body'], true );
-
-			if ( 200 !== $response['response']['code'] && 'OK' !== $response['response']['message'] ) {
-				// some kind of an error happened.
-
-				update_post_meta( $product->ID, 'log_woosquare_update_items_response_error', $object_response );
-				$message = '';
-				foreach ( $object_response['errors'] as $error ) {
-					$message .= $error['detail'] . ' - ' . str_replace( '_', ' ', $error['field'] );
-				}
-				$dddd = array(
-					'id'         => $product->ID,
-					'status'     => false,
-					'pro_status' => 'failed',
-					'message'    => $message,
+				$headers  = array(
+					'Authorization'  => 'Bearer ' . $this->square->get_access_token(),
+					'Content-Type'   => 'application/json',
+					'Square-Version' => '2024-03-20',
 				);
-				return $dddd;
-			} else {
+				$method   = 'POST';
+				$response = array();
 
-				if ( 200 === $response['response']['code'] ) {
-					update_post_meta( $product->ID, 'log_woosquare_update_items_response', $object_response );
-				}
+				$response     = $square->wp_remote_woosquare( $url, $data_json, $method, $headers, $response );
+				$responsesync = $response;
 
-				$response = $object_response['catalog_object'];
-				// Update product id with square id.
-				if ( isset( $response['id'] ) ) {
-					update_post_meta( $product->ID, 'square_id', $response['id'] );
-					do_action( 'manage_stock_from_square', $response['item_data']['variations'], $product->ID, isset( $all_square_variation ) ? $all_square_variation : null );
-					if ( 'PUT' === $request ) {
-						$square       = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), $woo_square_location_id, WOOSQU_PLUS_APPID );
-						$synchronizer = new SquareToWooSynchronizer( $square );
+				update_post_meta( $product->ID, 'log_woosquare_update_items_request', $data_json );
 
-						$square_inventory = $synchronizer->get_square_inventory( $response['item_data']['variations'] );
+				$object_response = json_decode( $response['body'], true );
 
-						$inventorycount = count( $response['item_data']['variations'] );
+				if ( 200 !== $response['response']['code'] && 'OK' !== $response['response']['message'] ) {
+					// some kind of an error happened.
 
-					}
-
-					if ( ! empty( $square_inventory ) ) {
-						if ( isset( $square_inventory->counts ) && $square_inventory->counts ) {
-							$square_inventory = $square_inventory->counts;
-						} else {
-							$square_inventory = $square_inventory;
-						}
-					}
-					// Update product variations ids with square ids.
-					$args           = array(
-						'post_parent' => $product->ID,
-						'post_type'   => 'product_variation',
-					);
-					$child_products = get_children( $args );
-					if ( isset( $child_products ) ) {
-						if ( empty( $child_products ) ) {
-							$child_products[] = get_post( $product->ID );
-						}
-						foreach ( $child_products as $child_product ) {
-							$cn = 1;
-
-							foreach ( $response['item_data']['variations'] as $variation ) {
-								$d = new DateTime();
-
-								$variation['updated_at'] = $d->format( 'Y-m-d\TH:i:s' ) . '.000Z';
-								$child_product_meta      = get_post_meta( $child_product->ID );
-
-								$variation_sku = isset( $child_product_meta['_sku'] ) ? $child_product_meta['_sku'][0] : null;
-								if ( $variation['item_variation_data']['sku'] === $variation_sku ) {
-									update_post_meta( $child_product->ID, 'variation_square_id', $variation['id'] );
-									if ( $update_inventory ) {
-
-										if ( 'yes' === $child_product_meta['_manage_stock'][0] ) {
-											if ( ! empty( $square_inventory ) && 'PUT' === $request ) {
-												foreach ( $square_inventory as $varid ) {
-
-													if ( $varid->catalog_object_id === $variation['id'] ) {
-
-														if ( $varid->quantity < $child_product_meta['_stock'][0] ) {
-															$stock   = $child_product_meta['_stock'][0] - $varid->quantity;
-															$adjtype = 'RECEIVE_STOCK';
-
-															$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
-														} elseif ( $varid->quantity > $child_product_meta['_stock'][0] ) {
-															$adjtype = 'SALE';
-															$stock   = $varid->quantity - $child_product_meta['_stock'][0];
-
-															$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
-														}
-														$matched_variants[] = $varid->catalog_object_id;
-													} else {
-														$miss_matched_variants[]                               = $variation['id'];
-														$miss_matched_variantions[ $variation['id'] ]          = $variation;
-														$miss_matched_variantions[ $variation['id'] ]['stock'] = $child_product_meta['_stock'][0];
-													}
-												}
-
-												if ( $inventorycount > count( $square_inventory ) && $inventorycount === $cn ) {
-													$newly_variants = array_unique( array_diff( $miss_matched_variants, $matched_variants ) );
-
-													foreach ( $newly_variants as $newvariat ) {
-														$this->update_inventory( $miss_matched_variantions[ $newvariat ], $miss_matched_variantions[ $newvariat ]['stock'], 'RECEIVE_STOCK', $woo_square_location_id );
-													}
-												}
-											} else {
-												// for first time update stock.
-
-												$this->update_inventory( $variation, $child_product_meta['_stock'][0], 'RECEIVE_STOCK', $woo_square_location_id );
-											}
-										}
-									}
-
-									if ( $upload_image ) {
-										if ( has_post_thumbnail( $child_product->ID ) ) {
-											$var_square_id  = $variation['id'];
-											$var_image_file = get_attached_file( get_post_thumbnail_id( $child_product->ID ) );
-											$var_image_name = basename( $var_image_file );
-
-											if ( $_product->is_type( 'simple' ) ) {
-												$var_result = $this->upload_var_image( $response['id'], $var_image_file, $var_image_name, $child_product->ID );
-											} if ( $_product->is_type( 'variable' ) ) {
-												$var_result = $this->upload_var_image( $var_square_id, $var_image_file, $var_image_name, $child_product->ID );
-											}
-
-											// make the response equal image response to be logged in error
-											// message field.
-											if ( true !== $var_result ) {
-												400 === $http_status;
-												$var_response = $var_result;
-											}
-										}
-									}
-								}
-
-								++$cn;
-
+					update_post_meta( $product->ID, 'log_woosquare_update_items_response_error', $object_response );
+					$message = '';
+					if ( isset( $object_response['errors'] ) && is_array( $object_response['errors'] ) ) {
+						foreach ( $object_response['errors'] as $error ) {
+							$error_detail    = isset( $error['detail'] ) ? $error['detail'] : '';
+							$error_field_raw = $error['field'] ?? '';
+							$error_field     = is_string( $error_field_raw ) ? str_replace( '_', ' ', $error_field_raw ) : '';
+							if ( $error_detail ) {
+								$message .= $error_detail . ( $error_field ? ' - ' . $error_field : '' ) . '; ';
 							}
 						}
-					} else {
-						// update simple product.
-
-						foreach ( $response['item_data']['variations'] as $variation ) {
-
-							$d                       = new DateTime();
-							$variation['updated_at'] = $d->format( 'Y-m-d\TH:i:s' ) . '.000Z';
-							update_post_meta( $product->ID, 'variation_square_id', $variation['id'] );
-							$product_details = get_post_meta( $product->ID );
-							$product_obj     = wc_get_product( $product->ID );
-							$product_stock   = $product_obj->get_stock_quantity();
-
-							if ( $update_inventory ) {
-								if ( 'yes' === $product_details['_manage_stock'][0] ) {
-
-									if ( ! empty( $square_inventory ) && 'PUT' === $request ) {
-											$varid = $square_inventory;
-
-										if ( $varid[0]->catalog_object_id === $variation['id'] ) {
-											if ( $varid[0]->quantity < $product_stock ) {
-												$stock   = $product_stock - $varid[0]->quantity;
-												$adjtype = 'RECEIVE_STOCK';
-												$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
-											} elseif ( $varid[0]->quantity > $product_stock ) {
-												$adjtype = 'SALE';
-												$stock   = $varid[0]->quantity - $product_stock;
-												$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
-											}
-										}
-									} else {
-										$adjtype = 'RECEIVE_STOCK';
-
-										$this->update_inventory( $variation, $product_stock, $adjtype, $woo_square_location_id );
-									}
-								}
-							}
-						}
+						$message = rtrim( $message, '; ' );
 					}
-
-					if ( $upload_image ) {
-						if ( has_post_thumbnail( $product->ID ) ) {
-							$product_square_id = $response['id'];
-							$image_file        = get_attached_file( get_post_thumbnail_id( $product->ID ) );
-							$image_name        = basename( $image_file );
-
-							$result = $this->upload_image( $product_square_id, $image_file, $image_name, $product->ID, true );
-							// make the response equal image response to be logged in error
-							// message field.
-							if ( true !== $result ) {
-								400 === $http_status;
-								$response = $result;
-							}
-						}
-
-						// Upload woocomerce gallery images.
-						$gallery_images = get_post_meta( $product->ID, '_product_image_gallery', true );
-						if ( ! empty( $gallery_images ) ) {
-							$gallery_images = explode( ',', $gallery_images );
-							foreach ( $gallery_images as $gallery_image ) {
-								$gallery_image_file = get_attached_file( $gallery_image );
-								$gallery_image_name = basename( $gallery_image_file );
-								$this->upload_image( $product_square_id, $gallery_image_file, $gallery_image_name, $product->ID, false );
-							}
-						}
+					if ( empty( $message ) ) {
+						$message = 'Unknown error occurred';
 					}
-				}
-
-				if ( $_product->is_type( 'booking' ) ) {
-					return $responsesync;
-				} else {
 					$dddd = array(
 						'id'         => $product->ID,
-						'status'     => true,
-						'pro_status' => $prod_cri,
-						'message'    => __( 'Successfully sync', 'woosquare' ),
+						'status'     => false,
+						'pro_status' => 'failed',
+						'message'    => $message,
 					);
+					
+					return $dddd;
+				} else {
 
-					return ( 200 === $responsesync['response']['code'] ) ? $dddd : $responsesync;
+					if ( 200 === $response['response']['code'] ) {
+						update_post_meta( $product->ID, 'log_woosquare_update_items_response', $object_response );
+					}
+
+					$response = $object_response['catalog_object'];
+					// Update product id with square id.
+					if ( isset( $response['id'] ) ) {
+						update_post_meta( $product->ID, 'square_id', $response['id'] );
+						do_action( 'manage_stock_from_square', $response['item_data']['variations'], $product->ID, isset( $all_square_variation ) ? $all_square_variation : null );
+						$square_inventory       = array();
+						$square_inventory_count = 0;
+						if ( 'PUT' === $request ) {
+							$square       = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), $woo_square_location_id, WOOSQU_PLUS_APPID );
+							$synchronizer = new SquareToWooSynchronizer( $square );
+
+							$square_inventory_raw = $synchronizer->get_square_inventory( $response['item_data']['variations'] );
+							if ( $square_inventory_raw ) {
+								if ( isset( $square_inventory_raw->counts ) && is_array( $square_inventory_raw->counts ) ) {
+									$square_inventory = $square_inventory_raw->counts;
+								} elseif ( is_array( $square_inventory_raw ) ) {
+									$square_inventory = $square_inventory_raw;
+								}
+							}
+
+							$inventorycount         = count( $response['item_data']['variations'] );
+							$square_inventory_count = is_countable( $square_inventory ) ? count( $square_inventory ) : 0;
+
+						}
+						// Update product variations ids with square ids.
+						$args           = array(
+							'post_parent' => $product->ID,
+							'post_type'   => 'product_variation',
+						);
+						$child_products = get_children( $args );
+						if ( isset( $child_products ) ) {
+							if ( empty( $child_products ) ) {
+								$child_products[] = get_post( $product->ID );
+							}
+							foreach ( $child_products as $child_product ) {
+								$cn = 1;
+
+								foreach ( $response['item_data']['variations'] as $variation ) {
+									$d = new DateTime();
+
+									$variation['updated_at'] = $d->format( 'Y-m-d\TH:i:s' ) . '.000Z';
+									$child_product_meta      = get_post_meta( $child_product->ID );
+
+									$variation_sku = isset( $child_product_meta['_sku'] ) ? $child_product_meta['_sku'][0] : null;
+									if ( $variation['item_variation_data']['sku'] === $variation_sku ) {
+										update_post_meta( $child_product->ID, 'variation_square_id', $variation['id'] );
+										if ( $update_inventory ) {
+
+											if ( 'yes' === $child_product_meta['_manage_stock'][0] ) {
+												if ( ! empty( $square_inventory ) && 'PUT' === $request ) {
+													foreach ( $square_inventory as $varid ) {
+
+														if ( $varid->catalog_object_id === $variation['id'] ) {
+
+															if ( $varid->quantity < $child_product_meta['_stock'][0] ) {
+																$stock   = $child_product_meta['_stock'][0] - $varid->quantity;
+																$adjtype = 'RECEIVE_STOCK';
+
+																$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
+															} elseif ( $varid->quantity > $child_product_meta['_stock'][0] ) {
+																$adjtype = 'SALE';
+																$stock   = $varid->quantity - $child_product_meta['_stock'][0];
+
+																$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
+															}
+															$matched_variants[] = $varid->catalog_object_id;
+														} else {
+															$miss_matched_variants[]                               = $variation['id'];
+															$miss_matched_variantions[ $variation['id'] ]          = $variation;
+															$miss_matched_variantions[ $variation['id'] ]['stock'] = $child_product_meta['_stock'][0];
+														}
+													}
+
+													if ( $inventorycount > $square_inventory_count && $inventorycount === $cn ) {
+														$newly_variants = array_unique( array_diff( $miss_matched_variants, $matched_variants ) );
+
+														foreach ( $newly_variants as $newvariat ) {
+															$this->update_inventory( $miss_matched_variantions[ $newvariat ], $miss_matched_variantions[ $newvariat ]['stock'], 'RECEIVE_STOCK', $woo_square_location_id );
+														}
+													}
+												} else {
+													// for first time update stock.
+
+													$this->update_inventory( $variation, $child_product_meta['_stock'][0], 'RECEIVE_STOCK', $woo_square_location_id );
+												}
+											}
+										}
+
+										if ( $upload_image ) {
+											if ( has_post_thumbnail( $child_product->ID ) ) {
+												$var_square_id  = $variation['id'];
+												$var_image_file = get_attached_file( get_post_thumbnail_id( $child_product->ID ) );
+												$var_image_name = basename( $var_image_file );
+
+												if ( $_product->is_type( 'simple' ) ) {
+													$var_result = $this->upload_var_image( $response['id'], $var_image_file, $var_image_name, $child_product->ID );
+												} if ( $_product->is_type( 'variable' ) ) {
+													$var_result = $this->upload_var_image( $var_square_id, $var_image_file, $var_image_name, $child_product->ID );
+												}
+
+												// make the response equal image response to be logged in error.
+												// message field.
+												if ( true !== $var_result ) {
+													400 === $http_status;
+													$var_response = $var_result;
+												}
+											}
+										}
+									}
+
+									++$cn;
+
+								}
+							}
+						} else {
+							// update simple product.
+
+							foreach ( $response['item_data']['variations'] as $variation ) {
+
+								$d                       = new DateTime();
+								$variation['updated_at'] = $d->format( 'Y-m-d\TH:i:s' ) . '.000Z';
+								update_post_meta( $product->ID, 'variation_square_id', $variation['id'] );
+								$product_details = get_post_meta( $product->ID );
+								$product_obj     = wc_get_product( $product->ID );
+								$product_stock   = $product_obj->get_stock_quantity();
+
+								if ( $update_inventory ) {
+									if ( 'yes' === $product_details['_manage_stock'][0] ) {
+
+										if ( ! empty( $square_inventory ) && 'PUT' === $request ) {
+											$varid = $square_inventory;
+
+											if ( isset( $varid[0] ) && isset( $varid[0]->catalog_object_id ) && $varid[0]->catalog_object_id === $variation['id'] ) {
+												if ( $varid[0]->quantity < $product_stock ) {
+													$stock   = $product_stock - $varid[0]->quantity;
+													$adjtype = 'RECEIVE_STOCK';
+													$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
+												} elseif ( $varid[0]->quantity > $product_stock ) {
+													$adjtype = 'SALE';
+													$stock   = $varid[0]->quantity - $product_stock;
+													$this->update_inventory( $variation, $stock, $adjtype, $woo_square_location_id );
+												}
+											}
+										} else {
+											$adjtype = 'RECEIVE_STOCK';
+
+											$this->update_inventory( $variation, $product_stock, $adjtype, $woo_square_location_id );
+										}
+									}
+								}
+							}
+						}
+
+						if ( $upload_image ) {
+							if ( has_post_thumbnail( $product->ID ) ) {
+								$product_square_id = $response['id'];
+								$image_file        = get_attached_file( get_post_thumbnail_id( $product->ID ) );
+								$image_name        = basename( $image_file );
+
+								$image_upload_result = $this->upload_image( $product_square_id, $image_file, $image_name, $product->ID, true );
+								// make the response equal image response to be logged in error.
+								// message field.
+								if ( true !== $image_upload_result ) {
+									400 === $http_status;
+								}
+							}
+
+							// Upload woocomerce gallery images.
+							$gallery_images = get_post_meta( $product->ID, '_product_image_gallery', true );
+							if ( ! empty( $gallery_images ) ) {
+								$gallery_images = explode( ',', $gallery_images );
+								foreach ( $gallery_images as $gallery_image ) {
+									$gallery_image_file = get_attached_file( $gallery_image );
+									$gallery_image_name = basename( $gallery_image_file );
+									$this->upload_image( $product_square_id, $gallery_image_file, $gallery_image_name, $product->ID, false );
+								}
+							}
+						}
+					}
+
+					if ( $_product->is_type( 'booking' ) ) {
+						return $responsesync;
+					} else {
+						$dddd = array(
+							'id'         => $product->ID,
+							'status'     => true,
+							'pro_status' => $prod_cri,
+							'message'    => __( 'Successfully sync', 'woosquare' ),
+						);
+
+						return ( 200 === $responsesync['response']['code'] ) ? $dddd : $responsesync;
+					}
 				}
-			}
 		}
 	}
 
@@ -2127,10 +2489,12 @@ class WooToSquareSynchronizer {
 	 */
 	public function upload_image( $product_square_id, $image_file, $image_name, $product_woo_id, $primary = false ) {
 
-		$get_content = 'file_get_contents';
-		$image       = $get_content( $image_file );
-		$image_name  = explode( '.', $image_name );
-		$headers     = array(
+		$prepared = $this->square_prepare_image_upload( $image_file );
+		if ( ! $prepared ) {
+			return false;
+		}
+
+		$headers = array(
 			'accept'         => 'application/json',
 			'content-type'   => 'multipart/form-data; boundary="boundary"',
 			'Square-Version' => '2024-11-20',
@@ -2149,7 +2513,7 @@ class WooToSquareSynchronizer {
 				'id'         => '#TEMP_ID',
 				'image_data' => array(
 					'caption' => '',
-					'name'    => $image_name[0],
+					'name'    => $prepared['label'],
 				),
 			),
 		);
@@ -2160,9 +2524,9 @@ class WooToSquareSynchronizer {
 		$body     .= wp_json_encode( $request );
 		$body     .= "\r\n";
 		$body     .= '--boundary' . "\r\n";
-		$body     .= 'Content-Disposition: form-data; name="file"; filename="' . esc_attr( basename( $image_path ) ) . '"' . "\r\n";
-		$body     .= 'Content-Type: image/jpeg' . "\r\n\r\n";
-		$body     .= $image . "\r\n";
+		$body     .= 'Content-Disposition: form-data; name="file"; filename="' . esc_attr( $prepared['filename'] ) . '"' . "\r\n";
+		$body     .= 'Content-Type: ' . $prepared['mime'] . "\r\n\r\n";
+		$body     .= $prepared['body'] . "\r\n";
 		$body     .= '--boundary--';
 		$url       = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/images';
 		$responses = wp_remote_post(
@@ -2172,7 +2536,13 @@ class WooToSquareSynchronizer {
 				'body'    => $body,
 			)
 		);
-		$response  = json_decode( $responses['body'], true );
+
+		if ( is_wp_error( $responses ) ) {
+			return $responses;
+		}
+
+		$response  = json_decode( wp_remote_retrieve_body( $responses ), true );
+		$http_code = wp_remote_retrieve_response_code( $responses );
 
 		if ( isset( $response['image']['id'] ) ) {
 			if ( $primary ) {
@@ -2197,7 +2567,8 @@ class WooToSquareSynchronizer {
 				);
 			}
 		}
-		return 200 === $responses['response']['code'] ? true : $response;
+
+		return 200 === $http_code ? true : $response;
 	}
 
 	/**
@@ -2216,10 +2587,12 @@ class WooToSquareSynchronizer {
 	 */
 	public function upload_var_image( $var_square_id, $var_image_file, $var_image_name, $var_product_woo_id ) {
 
-		$get_content    = 'file_get_contents';
-		$image          = $get_content( $var_image_file );
-		$var_image_name = explode( '.', $var_image_name );
-		$headers        = array(
+		$prepared = $this->square_prepare_image_upload( $var_image_file );
+		if ( ! $prepared ) {
+			return false;
+		}
+
+		$headers = array(
 			'accept'         => 'application/json',
 			'content-type'   => 'multipart/form-data; boundary="boundary"',
 			'Square-Version' => '2025-05-21',
@@ -2237,7 +2610,7 @@ class WooToSquareSynchronizer {
 				'id'         => '#TEMP_ID',
 				'image_data' => array(
 					'caption' => '',
-					'name'    => $var_image_name[0],
+					'name'    => $prepared['label'],
 				),
 			),
 		);
@@ -2249,9 +2622,9 @@ class WooToSquareSynchronizer {
 		$body     .= wp_json_encode( $request );
 		$body     .= "\r\n";
 		$body     .= '--boundary' . "\r\n";
-		$body     .= 'Content-Disposition: form-data; name="file"; filename="' . esc_attr( basename( $image_path ) ) . '"' . "\r\n";
-		$body     .= 'Content-Type: image/jpeg' . "\r\n\r\n";
-		$body     .= $image . "\r\n";
+		$body     .= 'Content-Disposition: form-data; name="file"; filename="' . esc_attr( $prepared['filename'] ) . '"' . "\r\n";
+		$body     .= 'Content-Type: ' . $prepared['mime'] . "\r\n\r\n";
+		$body     .= $prepared['body'] . "\r\n";
 		$body     .= '--boundary--';
 		$url       = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/images';
 		$responses = wp_remote_post(
@@ -2261,13 +2634,20 @@ class WooToSquareSynchronizer {
 				'body'    => $body,
 			)
 		);
-		$response  = json_decode( $responses['body'], true );
+
+		if ( is_wp_error( $responses ) ) {
+			return $responses;
+		}
+
+		$response  = json_decode( wp_remote_retrieve_body( $responses ), true );
+		$http_code = wp_remote_retrieve_response_code( $responses );
 
 		if ( isset( $response['image']['id'] ) ) {
 			update_post_meta( $var_product_woo_id, 'square_var_img_id', $response['image']['id'] );
 			update_post_meta( $var_product_woo_id, '_woo_square_attachment_id', $response['image']['id'] );
 		}
-		return 200 === $responses['response']['code'] ? true : $response;
+
+		return 200 === $http_code ? true : $response;
 	}
 
 	/**
@@ -2414,7 +2794,7 @@ class WooToSquareSynchronizer {
 
 		// get square ids.
 		$option_keys = ' (';
-		// get category ids and add category_square_id_ to it to form its key in
+		// get category ids and add category_square_id_ to it to form its key in.
 		// the options table.
 		foreach ( $categories as $category ) {
 			$option_keys .= "'category_square_id_{$category->term_id}',";
@@ -2464,7 +2844,6 @@ class WooToSquareSynchronizer {
 		LEFT JOIN {$wpdb->prefix}postmeta AS meta ON (posts.ID = meta.post_id AND meta.meta_key = 'is_square_sync')
 		where posts.post_type = 'product'
 		AND posts.post_status = 'publish'
-		AND ( (meta.meta_value = '0') OR (meta.meta_value = '1') OR (meta.meta_value is NULL) )
 		GROUP BY posts.ID";
 		$get_results = 'get_results';
 		return $wpdb->$get_results( $query, OBJECT );

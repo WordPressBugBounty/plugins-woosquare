@@ -590,7 +590,8 @@ function format_amount( $total, $currency = '' ) {
 			$total = absint( $total );
 			break;
 		default:
-			$total = round( $total, 2 ) * 100; // In cents.
+			$total = round( $total, 2 );
+			$total = (int) round( $total * 100, 0 );
 			break;
 	}
 

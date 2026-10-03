@@ -266,9 +266,12 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 	 * @param WC_Order $order The WooCommerce order object.
 	 */
 	public function handle_square_customer_creation( $order ) {
+		// Default to null to avoid undefined variable use.
+		$square_customer_id = null;
+
 		// Check if we need to sync the customer with Square.
 
-		if ( get_option( 'woo_square_customer_sync_square_order_sync' ) === '1' || $this->create_customer ) {
+		if ( $this->create_customer ) {
 
 			// Initialize Square customer ID.
 			$square_customer_id = null;
@@ -311,7 +314,7 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 
 			if ( empty( $search_customer->customers[0]->id ) ) {
 				// Check if we need to create a new customer in Square.
-				if ( empty( $square_customer_id ) || get_option( 'woo_square_create_customer_guest' ) === '1' || ! is_user_logged_in() || $this->create_customer ) {
+				if ( empty( $square_customer_id ) ) {
 					$order->update_meta_data( '_createcustomer', '1' );
 
 					// Ensure the customer object is valid.
@@ -330,6 +333,8 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 				$order->add_order_note( sprintf( __( 'Customer created or updated on Square: %s', 'woosquare' ), $square_customer_id ) );
 			}
 		}
+
+		return $square_customer_id;
 	}
 
 	/**
@@ -553,7 +558,7 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 				);
 			}
 
-			$this->handle_square_customer_creation( $order );
+			$square_customer_id = $this->handle_square_customer_creation( $order );
 
 			if ( function_exists( 'square_order_sync_add_on' ) ) {
 				$data['order_id'] = square_order_sync_add_on( $order, $location_id, $currency, $idempotency_key, $this->token, $endpoint, $square_customer_id );
@@ -587,7 +592,7 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 			);
 			$order->update_meta_data( 'woosquare_request_results_ach_' . wp_rand( 1, 1000 ), $result );
 
-			if ( isset( $result->payment->id ) && get_transient( 'is_sandbox' ) && 'PENDING' === $result->payment->status ) {
+			if ( isset( $result->payment->id ) && 'PENDING' === $result->payment->status ) {
 
 				// Payment complete.
 				$order->add_meta_data( 'woosquare_transaction_id', $result->payment->id, true );
@@ -600,7 +605,7 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 				$this->log( "Success: $authorized_message" );
 				$order->save();
 				// Reduce stock levels.
-				version_compare( WC_VERSION, '3.0.0', '<' ) ? $order->reduce_order_stock() : wc_reduce_stock_levels( $order->id );
+				version_compare( WC_VERSION, '3.0.0', '<' ) ? $order->reduce_order_stock() : wc_reduce_stock_levels( $order->get_id() );
 
 			} elseif ( isset( $result->payment->id ) && 'CAPTURED' === $result->payment->card_details->status ) {
 
@@ -628,7 +633,7 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 				$this->log( "Success: $authorized_message" );
 
 				// Reduce stock levels.
-				version_compare( WC_VERSION, '3.0.0', '<' ) ? $order->reduce_order_stock() : wc_reduce_stock_levels( $order->id );
+				version_compare( WC_VERSION, '3.0.0', '<' ) ? $order->reduce_order_stock() : wc_reduce_stock_levels( $order->get_id() );
 
 			}
 
@@ -775,7 +780,8 @@ class WooSquareACHPayment_Gateway extends WC_Payment_Gateway {
 				$total = absint( $total );
 				break;
 			default:
-				$total = round( $total, 2 ) * 100; // In cents.
+				$total = round( $total, 2 );
+				$total = (int) round( $total * 100, 0 );
 				break;
 		}
 

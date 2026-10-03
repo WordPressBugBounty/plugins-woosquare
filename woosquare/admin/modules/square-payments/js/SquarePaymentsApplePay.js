@@ -38,34 +38,28 @@
                         total_price = parseFloat(jQuery('.woocommerce-variation-price .woocommerce-Price-amount bdi').first().text().replace(squareapplepay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
                     }
 
-                    // Multiply by quantity
-                    total_price = (total_price * jQuery('.qty').val()).toFixed(2);
-                    console.log('Variable product selected. Total price: ' + total_price);
+                // Multiply by quantity
+                total_price = (total_price * jQuery('.qty').val()).toFixed(2);
 
 
-                } else {
-                    // Simple product page
-                    total_price = (squareapplepay_params.get_price * jQuery('.qty').val()).toFixed(2);
-                    console.log('Simple product. Total price: ' + total_price);
-                }
+            } else {
+                // Simple product page
+                total_price = (squareapplepay_params.get_price * jQuery('.qty').val()).toFixed(2);
+            }
             } else if (jQuery('body').hasClass('woocommerce-cart')) {
                 // Cart page - Extract total price from the provided HTML structure
                 var cart_total_element = jQuery('.wc-block-components-totals-footer-item-tax-value').first();
 
-                if (cart_total_element.length > 0) {
-                    // Extract the total price and clean up any unwanted characters
-                    total_price = parseFloat(cart_total_element.text().replace(squareapplepay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
-                    console.log('Cart page. Total price: ' + total_price);
-                } else {
-                    console.error('Total price element not found on the cart page.');
-                }
+            if (cart_total_element.length > 0) {
+                // Extract the total price and clean up any unwanted characters
+                total_price = parseFloat(cart_total_element.text().replace(squareapplepay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
             }
-        }
+            }
+    }
 
-		
-		var total_price = total_price.replace(",", ""); 
-        console.log('applepay. Total price: ' + total_price);
-        //var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').html();
+	
+	var total_price = total_price.replace(",", ""); 
+    //var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').html();
         //var total = id_of_div.split("span")[2];
         //var total = total.substring(1, total.length);
         //var total_price = total.toString(); 
@@ -90,7 +84,6 @@
         $('.wc-block-cart__payment-options.wp-block-woocommerce-cart-express-payment-block').after('<div id="apple-pay-button" ' + style + ' class="apple-pay-button-single-product"></div>');
 
         setTimeout(function() {
-            console.log('Quantity message detected:', this.textContent);
             initializeApplePay(payments);
 
         }, 1500);
@@ -99,10 +92,7 @@
 
     async function tokenize(paymentMethod) {
         const tokenResult = await paymentMethod.tokenize();
-        // alert('tokenssss'+tokenResult.status+'tttt'+tokenResult.token);
-        // alert(tokenResult.token); 
         if (tokenResult.status === 'OK') {
-
             showLoader();
             // Check if we are on the single product page or cart page
             if ($('body').hasClass('single-product') || $('body').hasClass('woocommerce-cart')) {
@@ -129,31 +119,26 @@
                         _payid: 'square_apple_pay'+squareapplepay_params.sandbox,
                         square_pay_nonce: squareapplepay_params.square_pay_nonce, // Pass the security nonce
                     },
-                    success: function(response) {
-                        if (response.success) {
-                            hideLoader();
-                            // Correct way to access the redirect_url
-                            window.location.href = response.data.redirect_url; // Redirect on success
-                        } else {
-                            hideLoader();
-                            console.error(response.error);
-                        }
-                    },
-                    error: function(err) {
+                success: function(response) {
+                    if (response.success) {
                         hideLoader();
-                        console.error('AJAX error:', err);
+                        // Correct way to access the redirect_url
+                        window.location.href = response.data.redirect_url; // Redirect on success
+                    } else {
+                        hideLoader();
+                        console.error(response.error);
                     }
+                },
+                error: function(err) {
+                    hideLoader();
+                    console.error('AJAX error:', err);
+                }
                 });
             } else {
                 var $form = jQuery('form.woocommerce-checkout, form.wc-block-checkout__form, form#order_review');
-                // inject nonce to a hidden field to be submitted
-                /*$form.append( '<input type="hidden" class="errors" name="errors" value="' + errors + '" />' );
-                 $form.append( '<input type="hidden" class="noncedatatype" name="noncedatatype" value="' + noncedatatype + '" />' );
-                 $form.append( '<input type="hidden" class="cardData" name="cardData" value="' + cardData + '" />' );
-                 */
+                $form.find('.square-nonce').remove();
                 $form.append('<input type="hidden" class="square-nonce" name="square_nonce" value="' + tokenResult.token + '" />');
                 if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_apple_pay' + squareapplepay_params.sandbox) {
-                    // pay_form.submit();
                     jQuery(".wc-block-components-checkout-place-order-button").trigger("click");
                 } else {
                     $form.submit();
@@ -186,31 +171,10 @@
                 'apple-pay-button'
             );
 
-            function handlePaymentMethodSubmissionapplep(event, paymentMethod) {
-
-                //debugger;
+            async function handlePaymentMethodSubmissionapplep(event, paymentMethod) {
                 event.preventDefault();
-
-
                 try {
-                    // disable the submit button as we await tokenization and make a
-                    // payment request.
-                    const token = tokenize(paymentMethod);
-
-
-                    if (token.status === 'OK') {
-
-                    } else {
-                        // var html = '';
-                        // html += '<ul class="woocommerce_error woocommerce-error">';
-                        // $('#place_order').prop('disabled', false);
-                        // html += '<li>' + token + '</li>';
-                        // html += '</ul>';
-                        // $( '.payment_method_square_plus fieldset' ).eq(0).prepend( html );
-                        // var $form = jQuery( 'form.woocommerce-checkout, form#order_review' );
-                        // $form.append( '<input type="hidden" class="square_submit_error" name="square_submit_error" value="' + html + '" />' );
-                    }
-                    console.debug('Payment Success', displayPaymentResults);
+                    await tokenize(paymentMethod);
                 } catch (e) {
                     console.error(e.message);
                 }
@@ -221,8 +185,7 @@
                 const applePayButton = document.getElementById('apple-pay-button');
 
                 applePayButton.addEventListener('click', async function(event) {
-
-                    handlePaymentMethodSubmissionapplep(event, applePay);
+                    await handlePaymentMethodSubmissionapplep(event, applePay);
                 });
             }
 
@@ -231,8 +194,7 @@
         return applePay;
     }
 
-    function showLoaderapple() {
-        console.log('showLoadershowLoader');
+    function showLoader() {
         $('body').block({
             message: null, // Use default spinner
             overlayCSS: {
@@ -243,8 +205,7 @@
     }
 
     // Function to hide loader
-    function hideLoaderapple() {
-        console.log('hideLoaderhideLoader');
+    function hideLoader() {
         $('body').unblock(); // Unblock the loader
     }
 
@@ -278,11 +239,10 @@
         jQuery(document.body).on('updated_checkout', function() {
             try {
                 applePay = initializeApplePay(payments);
-            } catch (e) {
-                jQuery("#browser_support_msg").text("Apple Pay is not available on this browser.");
-                document.getElementById("apple-pay-button").style.display = "none";
-                //console.log('Initializing Apple Pay failed', e);
-            }
+        } catch (e) {
+            jQuery("#browser_support_msg").text("Apple Pay is not available on this browser.");
+            document.getElementById("apple-pay-button").style.display = "none";
+        }
         });
         setTimeout(function() {
             if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_apple_pay' + squareapplepay_params.sandbox) {
@@ -349,22 +309,19 @@
                 var oldValueapl = $(this).data('oldValueaplcart');
                 var newValueapl = $(this).val();
 
-                // Only execute if the new value differs from the old value
-                if (newValueapl !== oldValueapl && !isEventTriggered) {
-                    isEventTriggered = true; // Set the flag to true to prevent further executions
+            // Only execute if the new value differs from the old value
+            if (newValueapl !== oldValueapl && !isEventTriggered) {
+                isEventTriggered = true; // Set the flag to true to prevent further executions
 
-                    console.log('Quantity changed: ' + newValueapl);
-
-                    // Clear any previously set timeouts to avoid multiple inits
+                // Clear any previously set timeouts to avoid multiple inits
                     clearTimeout(window.expressCheckoutTimeoutapple);
 
-                    // Reinitialize the Apple Pay button after a delay (800ms)
-                    window.expressCheckoutTimeoutapple = setTimeout(function() {
-                        console.log('express_checkout_init_apple');
-                        express_checkout_init_apple(payments);
+                // Reinitialize the Apple Pay button after a delay (800ms)
+                window.expressCheckoutTimeoutapple = setTimeout(function() {
+                    express_checkout_init_apple(payments);
 
-                        isEventTriggered = false; // Reset the flag after the event is processed
-                    }, 800);
+                    isEventTriggered = false; // Reset the flag after the event is processed
+                }, 800);
                 }
             }
 
@@ -385,7 +342,6 @@
                             $(mutation.addedNodes).each(function() {
                                 if (typeof this.textContent === 'string' && this.textContent.match(/Quantity/)) {
                                     setTimeout(function() {
-                                        console.log('express_checkout_init_apple 2');
                                         express_checkout_init_apple(payments);
                                     }, 1000); // Shortened timeout for express checkout
 
@@ -427,7 +383,6 @@
                 $('.wc-block-components-quantity-selector__input').each(function() {
                     if (!$(this).data('event-attached')) {
                         $(this).data('event-attached', true);
-                        console.log('Event attached via fallback check');
                         $(this).on('input change', function(event) {
                             var $input = $(event.target);
                             var oldValueapl = $input.data('oldValueaplcart');
@@ -448,7 +403,6 @@
 
             jQuery('.qty').prop('disabled', true);
             $('body').on('keyup paste input', '.qty', function() {
-                console.log('Quantity changed apple: ' + $(this).val());
                 var oldValueapl = $(this).data('oldValueapl');
                 var newValueapl = $(this).val();
                 if (newValueapl !== oldValueapl) {
@@ -457,7 +411,6 @@
 
                     // Reinitialize the Apple Pay button after a delay (500ms)
                     window.expressCheckoutTimeoutapple = setTimeout(function() {
-                        console.log('express_checkout_init_apple');
                         express_checkout_init_apple(payments);
                     }, 500);
                 }

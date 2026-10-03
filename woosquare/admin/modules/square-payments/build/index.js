@@ -185,7 +185,6 @@ __webpack_require__.r(__webpack_exports__);
 
 //reallllll
 const settings = square_index_params.woocommerce_square_gift_card_pay_enabled;
-console.log(settings);
 if (settings) { 
   _block_json__WEBPACK_IMPORTED_MODULE_2__.parent = ["woocommerce/checkout-order-summary-block"];
   (0,_woocommerce_blocks_checkout__WEBPACK_IMPORTED_MODULE_0__.registerCheckoutBlock)({
@@ -508,9 +507,17 @@ const Content = ({
 
       const interval = setInterval(() => {
         const square_nonce = jQuery('.square-nonce').val();
+        // WSSS-416: Terminal Pay uses term_checkout_id (no card nonce).
+        const term_checkout_id = jQuery('.term_checkout_id').val();
+        if (term_checkout_id && term_checkout_id.length > 0) {
+          clearInterval(interval);
+          resolve(square_nonce || '');
+          return;
+        }
         if (square_nonce && square_nonce.length > 0) {
           clearInterval(interval);
           resolve(square_nonce);
+          return;
         }
 
         elapsed += intervalTime;
@@ -551,7 +558,6 @@ const Content = ({
       }
     };
   } catch (error) {
-    console.log('Waiting for square_nonce failed:', error.message);
     return {
       type: emitResponse.responseTypes.ERROR,
       message: 'There was an error while waiting for Square token.'

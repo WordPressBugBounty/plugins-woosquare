@@ -5,65 +5,63 @@
     const gpay_location_id = squaregpay_params.lid;
 
 
-    function buildPaymentRequest(payments) {
+    function parseMoneyAmount(rawValue) {
+        if (!rawValue) {
+            return null;
+        }
+        var numeric = parseFloat(rawValue.toString().replace(/[^\d.-]/g, ''));
+        if (!isFinite(numeric)) {
+            return null;
+        }
+        return numeric.toFixed(2);
+    }
+
+    function getGooglePayTotalAmount() {
+        var total_price = null;
+
         if (jQuery('form.wc-block-checkout__form').length > 0) {
             // Block-based checkout
-            var id_of_div = jQuery('.wc-block-components-totals-footer-item-tax-value').html();
-            var total_price = id_of_div.split(squaregpay_params.currency_sym)[1];
-            total_price = total_price.replace(" ", "");
-
+            var blockTotalText = jQuery('.wc-block-components-totals-item__value .wc-block-formatted-money-amount, .wc-block-components-totals-footer-item-tax-value, .wc-block-formatted-money-amount').first().text();
+            total_price = parseMoneyAmount(blockTotalText);
         } else if (jQuery('form.checkout.woocommerce-checkout').length > 0) {
             // Classic checkout page
-            var id_of_div = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').html();
-            var total = id_of_div.split("span")[2];
-            total = total.substring(1, total.length);
-            var total_price = total.toString();
-
+            var classicTotalText = jQuery('div#order_review tr.order-total span.woocommerce-Price-amount bdi').first().text();
+            total_price = parseMoneyAmount(classicTotalText);
         } else if (jQuery('body').hasClass('single-product') || jQuery('body').hasClass('woocommerce-cart')) {
-            // Single product page
-            var total_price;
-
+            // Single product / cart
             if (jQuery('body').hasClass('single-product')) {
-                // Check if it's a variable product by looking for variation forms
                 if (jQuery('.variations_form').length > 0) {
-                    // Handle variable product: listen for variation changes and update price
-                    // Get the variation price (inside <ins> tag for sale price, or <span> for regular price)
                     var variation_price_element = jQuery('.woocommerce-variation-price ins .woocommerce-Price-amount bdi');
                     if (variation_price_element.length > 0) {
-                        // Sale price is available
-                        total_price = parseFloat(variation_price_element.first().text().replace(squaregpay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
+                        total_price = parseMoneyAmount(variation_price_element.first().text());
                     } else {
-                        // Regular price
-                        total_price = parseFloat(jQuery('.woocommerce-variation-price .woocommerce-Price-amount bdi').first().text().replace(squaregpay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
+                        total_price = parseMoneyAmount(jQuery('.woocommerce-variation-price .woocommerce-Price-amount bdi').first().text());
                     }
-
-                    // Multiply by quantity
-                    total_price = (total_price * jQuery('.qty').val()).toFixed(2);
-                    console.log('Variable product selected. Total price: ' + total_price);
-
-
+                    if (total_price !== null) {
+                        total_price = (parseFloat(total_price) * (parseFloat(jQuery('.qty').val()) || 1)).toFixed(2);
+                    }
                 } else {
-                    // Simple product page
-                    total_price = (squaregpay_params.get_price * jQuery('.qty').val()).toFixed(2);
-                    console.log('Simple product. Total price: ' + total_price);
+                    total_price = ((parseFloat(squaregpay_params.get_price) || 0) * (parseFloat(jQuery('.qty').val()) || 1)).toFixed(2);
                 }
             } else if (jQuery('body').hasClass('woocommerce-cart')) {
-                // Cart page - Extract total price from the provided HTML structure
-                var cart_total_element = jQuery('.wc-block-components-totals-footer-item-tax-value').first();
-
+                var cart_total_element = jQuery('.wc-block-components-totals-item__value .wc-block-components-totals-footer-item-tax-value, .wc-block-components-totals-item__value .wc-block-formatted-money-amount, .wc-block-components-totals-footer-item-tax-value').first();
                 if (cart_total_element.length > 0) {
-                    // Extract the total price and clean up any unwanted characters
-                    total_price = parseFloat(cart_total_element.text().replace(squaregpay_params.currency_sym, '').replace(/[^\d.-]/g, '')).toFixed(2);
-                    console.log('Cart page. Total price: ' + total_price);
-                } else {
-                    console.error('Total price element not found on the cart page.');
+                    total_price = parseMoneyAmount(cart_total_element.text());
                 }
             }
         }
+
+        return total_price;
+    }
+
+    function buildPaymentRequest(payments) {
+        var total_price = getGooglePayTotalAmount();
+        if (total_price === null) {
+            throw new Error('Checkout total not ready for Google Pay initialization');
+        }
+
         showLoader();
-		var total_price = total_price.replace(",", ""); 
-        console.log('gpayyytotal_price');
-        console.log(total_price);
+        total_price = total_price.toString().replace(/,/g, '');
         return payments.paymentRequest({
             countryCode: squaregpay_params.country_code,
             currencyCode: squaregpay_params.currency_code,
@@ -75,71 +73,172 @@
     }
 
     let googlePay;
+    let googlePayInitializing = false;
+    let googlePayInitPending = false;
+    let googlePayAttachTimer = null;
+    let googlePayBootTimer = null;
+    let googlePayBootStartedAt = 0;
+    const GOOGLE_PAY_CONTAINER_SELECTOR = '#google-pay-button';
+    const GOOGLE_PAY_BLOCK_SELECTOR = "input[name=radio-control-wc-payment-method-options]:checked";
+    const GOOGLE_PAY_CLASSIC_SELECTOR = '.woocommerce-checkout-payment .input-radio:checked';
 
+    function isGooglePaySelected() {
+        var selectedMethod = jQuery(GOOGLE_PAY_BLOCK_SELECTOR).val() || jQuery(GOOGLE_PAY_CLASSIC_SELECTOR).val();
+        return selectedMethod === ('square_google_pay' + squaregpay_params.sandbox);
+    }
+
+    function scheduleGooglePayInit(payments, options) {
+        var opts = options || {};
+        var minDelay = opts.minDelay || 100;
+        var retryEvery = opts.retryEvery || 250;
+        var maxWait = opts.maxWait || 10000;
+        var requireSelection = opts.requireSelection !== false;
+        var requireContainer = opts.requireContainer !== false;
+
+        if (googlePayBootTimer) {
+            clearTimeout(googlePayBootTimer);
+            googlePayBootTimer = null;
+        }
+
+        googlePayBootStartedAt = Date.now();
+
+        function tick() {
+            var elapsed = Date.now() - googlePayBootStartedAt;
+            var hasContainer = !!document.querySelector(GOOGLE_PAY_CONTAINER_SELECTOR);
+            var hasSelection = !requireSelection || isGooglePaySelected();
+            var hasReadyContainer = !requireContainer || hasContainer;
+            var hasTotalAmount = getGooglePayTotalAmount() !== null;
+
+            if (hasSelection && hasReadyContainer && hasTotalAmount && window.Square && payments) {
+                initializeGooglePay(payments);
+                return;
+            }
+
+            if (elapsed >= maxWait) {
+                return;
+            }
+
+            googlePayBootTimer = setTimeout(tick, retryEvery);
+        }
+
+        googlePayBootTimer = setTimeout(tick, minDelay);
+    }
+
+    function clearGooglePayContainer() {
+        const container = document.querySelector(GOOGLE_PAY_CONTAINER_SELECTOR);
+        if (container) {
+            container.innerHTML = '';
+            delete container.dataset.woosquareGpayBound;
+        }
+    }
+
+    async function destroyGooglePayInstance() {
+        if (googlePayAttachTimer) {
+            clearTimeout(googlePayAttachTimer);
+            googlePayAttachTimer = null;
+        }
+        if (googlePay && typeof googlePay.destroy === 'function') {
+            try {
+                await googlePay.destroy();
+            } catch (e) {
+                // ignore destroy errors
+            }
+        }
+        googlePay = null;
+        clearGooglePayContainer();
+    }
+
+    function waitForGooglePayContainer(timeoutMs) {
+        return new Promise(function(resolve) {
+            var start = Date.now();
+            (function poll() {
+                var el = document.querySelector(GOOGLE_PAY_CONTAINER_SELECTOR);
+                if (el) {
+                    resolve(el);
+                    return;
+                }
+                if (Date.now() - start >= timeoutMs) {
+                    resolve(null);
+                    return;
+                }
+                setTimeout(poll, 100);
+            })();
+        });
+    }
+
+    function handlePaymentMethodSubmissiongpay(event, paymentMethod) {
+        event.preventDefault();
+        try {
+            jQuery('.woocommerce-error').remove();
+            tokenize(paymentMethod);
+        } catch (e) {
+            // keep place-order usable
+        }
+    }
+
+    // WP-1008: safe init for block checkout reload when Google Pay is pre-selected.
+    // Do not assign initializeGooglePay() return value to googlePay (it is a Promise).
     async function initializeGooglePay(payments) {
+        if (googlePayInitializing) {
+            googlePayInitPending = true;
+            return;
+        }
+        googlePayInitializing = true;
+        jQuery('#googlepay-initialization').show();
 
-        // if(jQuery('#google-pay-button').html().length > 1){
-        //    googlePay.destroy();
-        // }
-        const paymentRequest = buildPaymentRequest(payments);
-        googlePay = await payments.googlePay(paymentRequest);
+        try {
+            await destroyGooglePayInstance();
 
-        setTimeout(
-            function() {
+            var container = await waitForGooglePayContainer(5000);
+            if (!container) {
+                return;
+            }
 
-                //googlePay.attach('#google-pay-button');
-                
-                googlePay.attach('#google-pay-button', {
-                  buttonColor: squaregpay_params.ewallet_button_color,
-                  //buttonSizeMode: 'static',
-                  //buttonType: 'long'
+            var paymentRequest = buildPaymentRequest(payments);
+            googlePay = await payments.googlePay(paymentRequest);
+
+            await new Promise(function(resolve) {
+                googlePayAttachTimer = setTimeout(resolve, 200);
+            });
+            googlePayAttachTimer = null;
+
+            if (!googlePay || typeof googlePay.attach !== 'function') {
+                throw new Error('Google Pay instance not ready to attach');
+            }
+
+            await googlePay.attach('#google-pay-button', {
+                buttonColor: squaregpay_params.ewallet_button_color,
+            });
+
+            jQuery('.qty').prop('disabled', false);
+            jQuery('#googlepay-initialization').hide();
+            hideLoader();
+
+            var googlePayButton = document.getElementById('google-pay-button');
+            if (googlePayButton && !googlePayButton.dataset.woosquareGpayBound) {
+                googlePayButton.dataset.woosquareGpayBound = '1';
+                googlePayButton.addEventListener('click', async function(event) {
+                    if (!jQuery('.square-nonce').val()) {
+                        event.stopPropagation();
+                        handlePaymentMethodSubmissiongpay(event, googlePay);
+                    }
                 });
-                
-                
-                
-                jQuery('.qty').prop('disabled', false);
-                jQuery('#googlepay-initialization').hide();
-                const googlePayButton = document.getElementById('google-pay-button');
-                hideLoader();
-
-                function handlePaymentMethodSubmissiongpay(event, paymentMethod, shouldVerify = false, payments) {
-                    event.preventDefault();
-                    try {
-                        // disable the submit button as we await tokenization and make a
-                        // payment request.
-                        // cardButton.disabled = true;
-                        jQuery('.woocommerce-error').remove();
-                        const token = tokenize(paymentMethod, payments);
-                    } catch (e) {
-                        // cardButton.disabled = false;
-                        console.error(e.message);
-                    }
-                }
-
-                googlePayButton.addEventListener(
-                    'click', async function(event) {
-                        if (!jQuery('.square-nonce').val()) {
-                            event.stopPropagation();
-                            handlePaymentMethodSubmissiongpay(event, googlePay);
-                        }
-                    }
-                )
-                if (jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_google_pay' + squaregpay_params.sandbox) {
-
-                    googlePayButton.addEventListener(
-                        'click', async function(event) {
-                            handlePaymentMethodSubmissiongpay(event, googlePay);
-                        }
-                    )
-                }
-
-            }, 600
-        );
-        hideLoader();
+            }
+        } catch (e) {
+            console.error('Initializing Google Pay failed', e);
+            await destroyGooglePayInstance();
+        } finally {
+            jQuery('#googlepay-initialization').hide();
+            hideLoader();
+            googlePayInitializing = false;
+            if (googlePayInitPending) {
+                googlePayInitPending = false;
+                initializeGooglePay(payments);
+            }
+        }
     }
 
     function showLoader() {
-        console.log('showLoadershowLoader');
         $('body').block({
             message: null, // Use default spinner
             overlayCSS: {
@@ -151,7 +250,6 @@
 
     // Function to hide loader
     function hideLoader() {
-        console.log('hideLoaderhideLoader');
         $('body').unblock(); // Unblock the loader
     }
 
@@ -159,15 +257,12 @@
 
         
         
-        if (jQuery('#google-pay-button').html().length > 1) {
-            googlePay.destroy();
-        }
+        destroyGooglePayInstance();
         $('#google-pay-button').remove();
         $('.single_add_to_cart_button').after('<div id="google-pay-button"></div>');
         $('.wc-block-cart__payment-options.wp-block-woocommerce-cart-express-payment-block').after('<div id="google-pay-button"></div>');
 
         setTimeout(function() {
-            console.log('Quantity message detected:', this.textContent);
             initializeGooglePay(payments);
 
         }, 1500);
@@ -181,7 +276,6 @@
 
         const tokenResult = await
         paymentMethod.tokenize();
-        console.log(tokenResult);
         if (tokenResult.status === 'OK') {
             showLoader();
             // Check if we are on the single product page or cart page
@@ -260,11 +354,10 @@
         }
     }
 
-    function initgp(googlePay, payments) {
+    function initgp(payments) {
         try {
-            googlePay = initializeGooglePay(payments);
+            initializeGooglePay(payments);
         } catch (e) {
-            console.error('Initializing Google Pay failed', e);
             return;
         }
     }
@@ -279,19 +372,12 @@
             // let googlePay;
             setTimeout(
                 function() {
-                    if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                        if (jQuery('#google-pay-button').html().length > 1) {
-                            googlePay.destroy();
-                        }
-                        try {
-                            if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                                jQuery('#googlepay-initialization').show();
-                                googlePay = initializeGooglePay(payments);
-                            }
-                        } catch (e) {
-                            console.error('Initializing Google Pay failed', e);
-                            return;
-                        }
+                    if (jQuery('form.wc-block-checkout__form, form.checkout.woocommerce-checkout').length > 0) {
+                        scheduleGooglePayInit(payments, {
+                            minDelay: 100,
+                            retryEvery: 250,
+                            maxWait: 12000
+                        });
                     }
 
 
@@ -319,14 +405,11 @@
                             if (newValue !== oldValue && !isEventTriggered) {
                                 isEventTriggered = true; // Set the flag to true to prevent further executions
 
-                                console.log('Quantity changed: ' + newValue);
-
                                 // Clear any previously set timeouts to avoid multiple inits
                                 clearTimeout(window.expressCheckoutTimeout);
 
                                 // Reinitialize the Google Pay button after a delay (500ms)
                                 window.expressCheckoutTimeout = setTimeout(function() {
-                                    console.log('express_checkout_init');
                                     showLoader();
                                     express_checkout_init(payments);
 
@@ -352,7 +435,6 @@
                                         $(mutation.addedNodes).each(function() {
                                             if (typeof this.textContent === 'string' && this.textContent.match(/Quantity/)) {
                                                 setTimeout(function() {
-                                                    console.log('express_checkout_init 2');
                                                     showLoader();
                                                     express_checkout_init(payments);
                                                 }, 1000); // Shortened timeout for express checkout
@@ -395,7 +477,6 @@
                             $('.wc-block-components-quantity-selector__input').each(function() {
                                 if (!$(this).data('event-attached')) {
                                     $(this).data('event-attached', true);
-                                    console.log('Event attached via fallback check');
                                     $(this).on('input change', function(event) {
                                         var $input = $(event.target);
                                         var oldValue = $input.data('oldValuecart');
@@ -419,7 +500,6 @@
 
                         jQuery('.qty').prop('disabled', true);
                         $('body').on('keyup paste input', '.qty', function() {
-                            console.log('Quantity changed: ' + $(this).val());
                             var oldValue = $(this).data('oldValue');
                             var newValue = $(this).val();
                             if (newValue !== oldValue) {
@@ -428,7 +508,6 @@
 
                                 // Reinitialize the Google Pay button after a delay (500ms)
                                 window.expressCheckoutTimeout = setTimeout(function() {
-                                    console.log('express_checkout_init');
                                     showLoader();
                                     express_checkout_init(payments);
                                 }, 500);
@@ -454,17 +533,14 @@
                 jQuery(document.body).on(
                     'updated_checkout',
                     function() {
-                        if (jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                            if (jQuery('#google-pay-button').html().length > 1) {
-                                googlePay.destroy();
-                            }
+                        if (isGooglePaySelected()) {
                             try {
-                                if (jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                                    jQuery('#googlepay-initialization').show();
-                                    googlePay = initializeGooglePay(payments);
-                                }
+                                scheduleGooglePayInit(payments, {
+                                    minDelay: 100,
+                                    retryEvery: 250,
+                                    maxWait: 10000
+                                });
                             } catch (e) {
-                                console.error('Initializing Google Pay failed', e);
                                 return;
                             }
                         }
@@ -476,13 +552,16 @@
                 function() {
                     setTimeout(
                         () => {
-                            if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
+                            if (isGooglePaySelected()) {
                                 setTimeout(
                                     function() {
                                         try {
-                                            if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                                                jQuery('#googlepay-initialization').show();
-                                                googlePay = initializeGooglePay(payments);
+                                            if (isGooglePaySelected()) {
+                                                scheduleGooglePayInit(payments, {
+                                                    minDelay: 100,
+                                                    retryEvery: 250,
+                                                    maxWait: 10000
+                                                });
                                             }
                                         } catch (e) {
                                             console.error('Initializing Google Pay failed', e);
@@ -498,13 +577,16 @@
             jQuery('form.wc-block-checkout__form').on(
                 'change', "input[name=radio-control-wc-payment-method-options]",
                 function() {
-                    if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
+                    if (isGooglePaySelected()) {
                         setTimeout(
                             function() {
                                 try {
-                                    if (jQuery("input[name=radio-control-wc-payment-method-options]:checked").val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                                        jQuery('#googlepay-initialization').show();
-                                        googlePay = initializeGooglePay(payments);
+                                    if (isGooglePaySelected()) {
+                                        scheduleGooglePayInit(payments, {
+                                            minDelay: 100,
+                                            retryEvery: 250,
+                                            maxWait: 10000
+                                        });
                                     }
                                 } catch (e) {
                                     console.error('Initializing Google Pay failed', e);
@@ -518,17 +600,14 @@
             $('form.checkout').on(
                 'change', '.woocommerce-checkout-payment input',
                 function() {
-                    if (jQuery('#google-pay-button').html().length > 1) {
-                        googlePay.destroy();
-                    }
-                    if (jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_google_pay' + squaregpay_params.sandbox) {
+                    if (isGooglePaySelected()) {
                         try {
-                            if (jQuery('.woocommerce-checkout-payment .input-radio:checked').val() == 'square_google_pay' + squaregpay_params.sandbox) {
-                                jQuery('#googlepay-initialization').show();
-                                googlePay = initializeGooglePay(payments);
-                            }
+                            scheduleGooglePayInit(payments, {
+                                minDelay: 100,
+                                retryEvery: 250,
+                                maxWait: 10000
+                            });
                         } catch (e) {
-                            console.error('Initializing Google Pay failed', e);
                             return;
                         }
                     }

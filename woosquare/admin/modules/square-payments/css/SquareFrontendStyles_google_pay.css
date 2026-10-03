@@ -35,7 +35,7 @@
 }
 
 .woocommerce-cart #google-pay-button button iframe {
-    width: 100%; /* Stretch the iframe to match the button */
+   /* Stretch the iframe to match the button */
 }
 
 .woocommerce-cart #google-pay-button svg {

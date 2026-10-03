@@ -107,13 +107,7 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 
 
 	$woocommerce_square_plus_settings = get_option( 'woocommerce_square_plus' . get_transient( 'is_sandbox' ) . '_settings' );
-	if ( get_transient( 'is_sandbox' ) ) {
-		if ( ! defined( 'WOOSQU_ENABLE_STAGING' ) ) {
-			define( 'WOOSQU_ENABLE_STAGING', true );
-		}
-	} elseif ( ! defined( 'WOOSQU_ENABLE_STAGING' ) ) {
-			define( 'WOOSQU_ENABLE_STAGING', false );
-	}
+	// Removed WOOSQU_ENABLE_STAGING constant - using get_transient('is_sandbox') directly throughout plugin
 
 	add_action( 'wp_ajax_manual_sync', 'woo_square_manual_sync' );
 
@@ -166,13 +160,17 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 * @return void
 	 */
 	function check_sale_price_custom_attr() {
+		$access_token = get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) );
+		$location_id  = get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) );
+		if ( empty( $access_token ) || empty( $location_id ) ) {
+			return;
+		}
 		$activate_modules_woosquare_plus = get_option( 'activate_modules_woosquare_plus' . get_transient( 'is_sandbox' ) );
 		if ( isset( $activate_modules_woosquare_plus['items_sync']['module_activate'] ) && true === $activate_modules_woosquare_plus['items_sync']['module_activate'] ) {
 			if ( ! empty( get_option( 'woosquare_sale_price_custom_attr' ) ) ) {
-				$square              = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
+				$square              = new Square( $access_token, $location_id, WOOSQU_PLUS_APPID );
 				$square_synchronizer = new WooToSquareSynchronizer( $square );
 				$square_synchronizer->get_woosquare_custom_sale_attr();
-
 			}
 		}
 	}
@@ -204,15 +202,15 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 */
 	function woo_square_script() {
 
-		wp_enqueue_script( 'woo_square_script', WOO_SQUARE_PLUGIN_URL . '_inc/js/script.js', array( 'jquery' ), '1.0', true );
+		wp_enqueue_script( 'woo_square_script', WOO_SQUARE_PLUGIN_URL . '_inc/js/script.js', array( 'jquery' ), WOOSQUARE_VERSION, true );
 		$localize_array = array(
 			'ajaxurl'   => admin_url( 'admin-ajax.php' ),
 			'ajaxnonce' => wp_create_nonce( 'my_woosquare_ajax_nonce' ),
 		);
 		wp_localize_script( 'woo_square_script', 'myAjax', $localize_array );
 
-		wp_enqueue_style( 'woo_square_pop-up', WOO_SQUARE_PLUGIN_URL . '_inc/css/pop-up.css', '1.0', 'all' );
-		wp_enqueue_style( 'woo_square_synchronization', WOO_SQUARE_PLUGIN_URL . '_inc/css/synchronization.css', array(), '1.0', 'all' );
+		wp_enqueue_style( 'woo_square_pop-up', WOO_SQUARE_PLUGIN_URL . '_inc/css/pop-up.css', WOOSQUARE_VERSION, 'all' );
+		wp_enqueue_style( 'woo_square_synchronization', WOO_SQUARE_PLUGIN_URL . '_inc/css/synchronization.css', array(), WOOSQUARE_VERSION, 'all' );
 	}
 
 	/**
@@ -267,6 +265,7 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 */
 	function woo_square_manual_sync() {
 
+		// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Long-running sync needs unlimited execution time.
 		set_time_limit( 0 );
 
 		if ( ! get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
@@ -314,7 +313,20 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 		// Use html_compress($html) function to minify html codes.
 
 		if ( ! empty( $_GET['post'] ) ) { // phpcs:ignore
-			$admin_notice_square = get_post_meta( sanitize_text_field( wp_unslash( $_GET['post'] ) ), 'admin_notice_square', true ); // phpcs:ignore
+			$edit_post_id = absint( wp_unslash( $_GET['post'] ) ); // phpcs:ignore
+
+			$sync_status = get_post_meta( $edit_post_id, 'woosquare_edit_sync_status', true );
+			$sync_error  = get_post_meta( $edit_post_id, 'woosquare_edit_sync_error', true );
+
+			if ( 'failed' === $sync_status && ! empty( $sync_error ) ) {
+				?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php echo esc_html__( 'Square sync failed:', 'woosquare' ) . ' ' . esc_html( $sync_error ); ?></p>
+				</div>
+				<?php
+			}
+
+			$admin_notice_square = get_post_meta( $edit_post_id, 'admin_notice_square', true );
 
 			if ( ! empty( $admin_notice_square ) ) {
 				$admin_notice_square_esc = esc_attr( $admin_notice_square );
@@ -375,8 +387,8 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 		if ( $update ) {
 			// The product has been updated.
 			// Add your custom code here.
-			$gtin_product = wc_get_product( $post_id );
-			if ( $product && $product->is_type( 'variable' ) ) {
+			$product = wc_get_product( $post_id );
+			if ( ! empty( $product ) && is_object( $product ) && $product->is_type( 'variable' ) ) {
 				// Get all variations of the variable product.
 				$variations = $product->get_children(); // This returns an array of variation IDs.
 
@@ -413,95 +425,8 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 					return;
 				}
 
-				$product_square_id = '';
-				$product_square_id = get_post_meta( $post_id, 'square_id', true );
-				$square            = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
-
-				$square_synchronizer = new WooToSquareSynchronizer( $square );
-
-				$square_to_woo_synchronizer = new SquareToWooSynchronizer( $square );
-				$square_items               = $square_to_woo_synchronizer->get_square_items();
-
-				if ( $square_items ) {
-					$square_items = $square_synchronizer->simplify_square_items_object( $square_items );
-				} else {
-					$square_items = array();
-				}
-
-				$product_square_id = $square_synchronizer->check_sku_in_square( $post, $square_items );
-
-				$product = wc_get_product( $post->ID );
-
-				$response = array();
-
-				$method = 'POST';
-				$url    = 'https://connect.squareup' . get_transient( 'is_sandbox' ) . '.com/v2/catalog/search';
-
-				$headers = array(
-					'Authorization'  => 'Bearer ' . get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), // Use verbose mode in cURL to determine the format you want for this header.
-					'Content-Type'   => 'application/json;',
-					'Square-Version' => '2020-12-16',
-				);
-
-				$args = array(
-					'object_types'            =>
-					array(
-						0 => 'ITEM',
-						1 => 'ITEM_VARIATION',
-					),
-					'include_related_objects' => true,
-					'query'                   =>
-					array(
-						'text_query' =>
-						array(
-							'keywords' =>
-							array(
-								0 => $product->get_sku(),
-							),
-						),
-					),
-				);
-
-				$response = $square->wp_remote_woosquare( $url, $args, $method, $headers, $response );
-				if ( ! empty( $response['response'] ) ) {
-					if ( 200 === $response['response']['code'] && 'OK' === $response['response']['message'] ) {
-						$square_product = json_decode( $response['body'], false );
-					}
-				}
-
-				foreach ( $square_product as $product ) {
-					foreach ( $product_square_id->variations as $variation ) {
-						// Check if item_id matches.
-						if ( $product->item_variation_data->item_id === $variation->item_id ) {
-							// Merge present_at_location_ids into the variation.
-							$variation->present_at_location_ids = $product->present_at_location_ids;
-						}
-					}
-				}
-
-				if ( ! empty( $square_product->related_objects ) ) {
-					foreach ( $square_product->related_objects as $obj ) {
-						if ( 'ITEM' === $obj->type ) {
-							$product_square_id = $obj;
-						}
-					}
-				}
-
-				$result = $square_synchronizer->add_product( $post, $product_square_id );
-				if ( class_exists( 'WooSquare_Sync_Logs' ) ) {
-					$woo_product_sync_log_transient[ $post_id ][ $result['pro_status'] ] = $result;
-					$woosquare_sync_log = new WooSquare_Sync_Logs();
-					$log_id             = $woosquare_sync_log->log_data_request( $woo_product_sync_log_transient, '', 'woo_to_square', 'product' );
-				}
-
-				$termid = get_post_meta( $post_id, '_termid', true );
-				if ( '' === $termid ) { // new product.
-					$termid = 'update';
-				}
-				update_post_meta( $post_id, '_termid', $termid );
-
-				if ( true === $result['pro_status'] ) {
-					update_post_meta( $post_id, 'is_square_sync', 1 );
+				if ( class_exists( 'WooSquare_Product_Save_Queue' ) ) {
+					WooSquare_Product_Save_Queue::schedule( $post_id );
 				}
 			}
 		} else {
@@ -603,7 +528,9 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 * @return void
 	 */
 	function woo_square_add_category( $category_id ) {
-		session_start();
+		if ( session_status() === PHP_SESSION_NONE ) {
+			session_start();
+		}
 		$sync_on_add_edit = get_option( 'sync_on_add_edit', $default = false );
 		if ( '1' === $sync_on_add_edit ) {
 			// Avoid auto save from calling Square APIs.
@@ -651,7 +578,9 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 * @return void
 	 */
 	function woo_square_edit_category( $category_id ) {
-		session_start();
+		if ( session_status() === PHP_SESSION_NONE ) {
+			session_start();
+		}
 		$sync_on_add_edit = get_option( 'sync_on_add_edit', $default = false );
 		if ( '1' === $sync_on_add_edit ) {
 			// Avoid auto save from calling Square APIs.
@@ -716,7 +645,9 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 
 		$woo_product_delete_log_transientt = get_transient( 'woo_product_delete_log_transient' );
 
-		session_start();
+		if ( session_status() === PHP_SESSION_NONE ) {
+			session_start();
+		}
 		$sync_on_add_edit = get_option( 'sync_on_add_edit', $default = false );
 		delete_option( "is_square_sync_{$category_id}" );
 		delete_option( "category_square_id_{$category_id}" );
@@ -815,6 +746,9 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	 * @param array $square_product The product information from Square, including variations and product ID.
 	 */
 	function process_single_square_product( $square_product ) {
+		if ( ! is_array( $square_product ) ) {
+			return;
+		}
 		$woo_square_listsaved_products_square = get_option( 'woo_square_listsaved_products_square' );
 		$woo_square_sync_preference           = get_option( 'woo_square_sync_preference' );
 		$woo_square_auto_sync                 = get_option( 'woo_square_auto_sync' );
@@ -829,6 +763,10 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 		$square_synchronizer = new SquareToWooSynchronizer( $square );
 
 		// Square Inventory fetch karein.
+		if ( empty( $square_product['variations'] ) || ! is_array( $square_product['variations'] ) ) {
+			return;
+		}
+
 		$array = $square_product['variations'];
 
 		$square_inventory = $square_synchronizer->get_square_inventory( $array );
@@ -934,6 +872,7 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	function auto_sync_cron_job() {
 		if ( '1' === get_option( 'woo_square_auto_sync' ) ) {
 			update_option( 'woo_square_auto_sync_' . gmdate( 'Y-m-d H:i:s' ), '' );
+			// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Long-running cron sync needs unlimited execution time.
 			set_time_limit( 0 );
 
 			if ( ! get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ) ) {
@@ -1002,16 +941,18 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 			if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true ) ) {
 				$admin_page = 'wc-settings';
 				echo '<div class="error">
-					<p>'
-					// translators: Error message placeholder in a log entry. Placeholder: Error details.
-					. sprintf( esc_html__( 'To enable payment gateway Square requires that the <a href="%s">base country/region</a> is the United States,United Kingdom,Japan,Europe, Canada or Australia.', 'woosquare' ), esc_url( admin_url( 'admin.php?page=' . $admin_page . '&tab=general' ) ) ) . '</p>
+					<p>' . sprintf( /* translators: %s is the admin settings page URL. */
+					esc_html__( 'To enable payment gateway Square requires that the <a href="%s">base country/region</a> is the United States,United Kingdom,Japan,Europe, Canada or Australia.', 'woosquare' ),
+					esc_url( admin_url( 'admin.php?page=' . $admin_page . '&tab=general' ) )
+				) . '</p>
 				</div>';
 			} elseif ( ( in_array( 'mycred/mycred.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true ) ) ) {
 				$admin_page = 'mycred-gateways';
 				echo '<div class="error">
-					<p>'
-					// translators: Error message placeholder in a log entry. Placeholder: Error details.
-					. sprintf( esc_html__( 'To enable payment gateway Square requires that the <a href="%s">base country/region</a> is the United States,United Kingdom,Japan,Europe, Canada or Australia.', 'woosquare' ), esc_url( admin_url( 'admin.php?page=' . $admin_page ) ) ) . '</p>
+					<p>' . sprintf( /* translators: %s is the admin settings page URL. */
+					esc_html__( 'To enable payment gateway Square requires that the <a href="%s">base country/region</a> is the United States,United Kingdom,Japan,Europe, Canada or Australia.', 'woosquare' ),
+					esc_url( admin_url( 'admin.php?page=' . $admin_page ) )
+				) . '</p>
 				</div>';
 			}
 		}
@@ -1020,16 +961,18 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 			if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true ) ) {
 				$admin_page = 'wc-settings';
 				echo '<div class="error">
-					<p>'
-					// translators: Error message placeholder in a log entry. Placeholder: Error details.
-					. sprintf( esc_html__( 'To enable payment gateway Square requires that the <a href="%s">currency</a> is set to USD,GBP,JPY,EUR, CAD or AUD.', 'woosquare' ), esc_url( admin_url( 'admin.php?page=' . $admin_page . '&tab=general' ) ) ) . '</p>
+					<p>' . sprintf( /* translators: %s is the admin settings page URL. */
+					esc_html__( 'To enable payment gateway Square requires that the <a href="%s">currency</a> is set to USD,GBP,JPY,EUR, CAD or AUD.', 'woosquare' ),
+					esc_url( admin_url( 'admin.php?page=' . $admin_page . '&tab=general' ) )
+				) . '</p>
 				</div>';
 			} elseif ( ( in_array( 'mycred/mycred.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ), true ) ) ) {
 				$admin_page = 'mycred-gateways';
 				echo '<div class="error">
-					<p>'
-					// translators: Error message placeholder in a log entry. Placeholder: Error details.
-					. sprintf( esc_html__( 'To enable payment gateway Square requires that the <a href="%s">currency</a> is set to USD,GBP,JPY,EUR, CAD or AUD ', 'woosquare' ), esc_url( admin_url( 'admin.php?page=' . $admin_page ) ) ) . '</p>
+					<p>' . sprintf( /* translators: %s is the admin settings page URL. */
+					esc_html__( 'To enable payment gateway Square requires that the <a href="%s">currency</a> is set to USD,GBP,JPY,EUR, CAD or AUD.', 'woosquare' ),
+					esc_url( admin_url( 'admin.php?page=' . $admin_page ) )
+				) . '</p>
 				</div>';
 			}
 		}
@@ -1115,13 +1058,36 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 		$prepare = 'prepare';
 		if ( ! empty( $post_data->data ) ) {
 			$catalog_object_id = array();
+
+			if (
+				empty( $post_data->data->object->inventory_counts ) ||
+				! is_iterable( $post_data->data->object->inventory_counts )
+			) {
+				header( 'HTTP/1.1 200 OK' );
+				die();
+			}
+
 			foreach ( $post_data->data->object->inventory_counts as $key => $inventory_counts ) {
-				// Query the postmeta table to check if the meta_value exists.
-				$result = $wpdb->$get_var( $wpdb->$prepare( "SELECT COUNT(*) FROM $wpdb->postmeta WHERE meta_value = %s", $inventory_counts->catalog_object_id ) );
+				// Lookup only Square ID meta keys so large postmeta tables stay indexed/fast.
+				$result = $wpdb->$get_var(
+					$wpdb->$prepare(
+						"SELECT COUNT(*) FROM $wpdb->postmeta
+						WHERE meta_key IN ( 'variation_square_id', 'square_id', '_square_item_variation_id' )
+						AND meta_value = %s",
+						$inventory_counts->catalog_object_id
+					)
+				);
 				if ( isset( $result ) && $result > 0 ) {
 					$catalog_object_id[] = $inventory_counts->catalog_object_id;
 				}
 			}
+
+			// No linked products — skip Square API (empty object_ids returns 400).
+			if ( empty( $catalog_object_id ) ) {
+				header( 'HTTP/1.1 200 OK' );
+				die();
+			}
+
 			$square   = new Square( get_option( 'woo_square_access_token' . get_transient( 'is_sandbox' ) ), get_option( 'woo_square_location_id' . get_transient( 'is_sandbox' ) ), WOOSQU_PLUS_APPID );
 			$response = array();
 			$method   = 'POST';
@@ -1169,7 +1135,7 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 										)
 									);
 									$product_id = $product_id ? intval( $product_id ) : null;
-									if ( ! empty( $product_id ) && ! empty( $quantity ) ) {
+									if ( ! empty( $product_id ) && is_numeric( $quantity ) ) {
 										$product = wc_get_product( $product_id );
 										$product->set_stock_quantity( $quantity );
 										$product->set_manage_stock( true );
@@ -1268,3 +1234,4 @@ if ( ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins
 	add_filter( 'woocommerce_available_payment_gateways', 'payment_gateway_disable_country' );
 
 }
+

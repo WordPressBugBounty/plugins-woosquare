@@ -9461,6 +9461,11 @@ button.close span {
   padding-right: 6px;
 }
 
+.scrtabs-tab-scroll-arrow.scrtabs-tab-scroll-arrow-left.scrtabs-with-click-target.scrtabs-disable {
+  border-radius: 9px 0px 0px 0px;
+  background: white;
+}
+
 .scrtabs-tab-scroll-arrow-right {
   width: 48px;
   padding-left: 6px;
@@ -10808,7 +10813,7 @@ html body .m-t-10 {
 }
 
 .modal-content {
-  border-radius: 25px !important;
+  border-radius: 3px !important;
 }
 
 button.close.closecus {
@@ -11599,4 +11604,110 @@ input:focus-visible + label {
 	font-weight: bold !important;
 	text-decoration: underline !important;
 	color: #1E2124 !important;
+}
+
+/* Settings.php Inline Styles - Moved to CSS file */
+.authlog-fab span {
+	vertical-align: middle;
+}
+
+.woo_square_error {
+	background: #ddd;
+}
+
+.woo_square_error p {
+	color: red;
+	font-weight: bold;
+}
+
+.bs-example-modal-sm {
+	display: none;
+}
+
+.auth-log-modal {
+	display: none;
+}
+
+.auth-log-modal .modal-dialog {
+	max-width: 760px;
+}
+
+.auth-log-modal .modal-body {
+	padding: 20px 24px 10px;
+}
+
+.ws-modal-header {
+	text-align: center;
+	margin-bottom: 12px;
+}
+
+.ws-modal-header h3 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 600;
+	color: #374151;
+}
+
+.ws-logs-container {
+	max-height: 400px;
+	overflow-y: auto;
+	border: 1px solid #e5e7eb;
+	border-radius: 6px;
+}
+
+.ws-table thead {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+.ws-no-logs {
+	text-align: center;
+	padding: 20px;
+	color: #6b7280;
+}
+
+.ws-clear-logs-container {
+	text-align: right;
+	margin-top: 15px;
+	padding-bottom: 20px;
+}
+
+.ws-info-box {
+	background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+	border: 1px solid #0ea5e9;
+	border-radius: 8px;
+	padding: 16px;
+	margin-bottom: 20px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.ws-info-icon {
+	background: #0ea5e9;
+	color: white;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	font-weight: bold;
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+.ws-info-text {
+	color: #0c4a6e;
+	font-size: 14px;
+	line-height: 1.5;
+	margin: 0;
+}
+
+.ws-save-settings-container {
+	text-align: right;
+	margin-top: 20px;
+	padding-bottom: 20px;
 }

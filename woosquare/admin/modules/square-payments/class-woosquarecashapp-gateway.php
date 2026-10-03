@@ -105,11 +105,11 @@ class WooSquareCashApp_Gateway extends WC_Payment_Gateway {
 		$is_available = true;
 
 		if ( 'yes' === $this->enabled ) {
-			if ( ! WOOSQU_ENABLE_STAGING && ! wc_checkout_is_https() ) {
+			if ( ! get_transient( 'is_sandbox' ) && ! wc_checkout_is_https() ) {
 				$is_available = false;
 			}
 
-			if ( ! WOOSQU_ENABLE_STAGING && empty( $this->token ) ) {
+			if ( ! get_transient( 'is_sandbox' ) && empty( $this->token ) ) {
 				$is_available = true;
 			}
 
@@ -275,7 +275,7 @@ class WooSquareCashApp_Gateway extends WC_Payment_Gateway {
 	public function handle_square_customer_creation( $order ) {
 		// Check if we need to sync the customer with Square.
 
-		if ( get_option( 'woo_square_customer_sync_square_order_sync' ) === '1' || $this->create_customer ) {
+		if ( $this->create_customer ) {
 
 			// Initialize Square customer ID.
 			$square_customer_id = null;
@@ -318,7 +318,7 @@ class WooSquareCashApp_Gateway extends WC_Payment_Gateway {
 
 			if ( empty( $search_customer->customers[0]->id ) ) {
 				// Check if we need to create a new customer in Square.
-				if ( empty( $square_customer_id ) || get_option( 'woo_square_create_customer_guest' ) === '1' || ! is_user_logged_in() || $this->create_customer ) {
+				if ( empty( $square_customer_id ) ) {
 					$order->update_meta_data( '_createcustomer', '1' );
 
 					// Ensure the customer object is valid.
@@ -563,6 +563,7 @@ class WooSquareCashApp_Gateway extends WC_Payment_Gateway {
 			}
 
 			$this->handle_square_customer_creation( $order );
+			$square_customer_id = $order->get_meta( '_square_customer_id', true );
 
 			if ( function_exists( 'square_order_sync_add_on' ) ) {
 				$data['order_id'] = square_order_sync_add_on( $order, $location_id, $currency, $idempotency_key, $this->token, 'squareup' . get_transient( 'is_sandbox' ), $square_customer_id );
@@ -704,7 +705,8 @@ class WooSquareCashApp_Gateway extends WC_Payment_Gateway {
 				$total = absint( $total );
 				break;
 			default:
-				$total = round( $total, 2 ) * 100; // In cents.
+				$total = round( $total, 2 );
+				$total = (int) round( $total * 100, 0 );
 				break;
 		}
 
